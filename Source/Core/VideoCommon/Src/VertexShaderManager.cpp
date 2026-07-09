@@ -147,6 +147,13 @@ void UpdateProjectionHack(int iPhackvalue[], std::string sPhackvalue[])
 	g_ProjHack3 = bProjHack3;
 }
 
+// OG Xbox port: upstream never defines this member outside the wx GUI code,
+// but the backends call it unconditionally from Initialize().
+void VideoConfig::UpdateProjectionHack()
+{
+	::UpdateProjectionHack(iPhackvalue, sPhackvalue);
+}
+
 void VertexShaderManager::Init()
 {
 	Dirty();

@@ -52,11 +52,13 @@ namespace JitInterface
 				ptr = new Jit64();
 				break;
 			}
+			#ifndef _XBOX
 			case 2:
 			{
-				ptr = new JitIL();
+				ptr = new JitIL(); // IL JIT not built on Xbox (we use Jit64)
 				break;
 			}
+			#endif
 			#endif
 			#ifdef _M_ARM
 			case 3:
@@ -87,11 +89,13 @@ namespace JitInterface
 				Jit64Tables::InitTables();
 				break;
 			}
+			#ifndef _XBOX
 			case 2:
 			{
 				JitILTables::InitTables();
 				break;
 			}
+			#endif
 			#endif
 			#ifdef _M_ARM
 			case 3:

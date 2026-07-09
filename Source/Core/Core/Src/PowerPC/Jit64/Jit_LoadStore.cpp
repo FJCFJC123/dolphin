@@ -455,7 +455,22 @@ void Jit64::lmw(UGeckoInstruction inst)
 	}
 	gpr.UnlockAllX();
 #else
-	Default(inst); return;
+	// x86 (OG Xbox): implement directly (see stmw). Flush the register cache so
+	// the loads write straight to ppcState memory — avoids x86 register pressure
+	// from binding r(RD)..r31, and dodges the broken interpreter fallback.
+	gpr.Flush(FLUSH_ALL);
+	gpr.FlushLockX(ECX);
+	MOV(32, R(EAX), Imm32((u32)(s32)inst.SIMM_16));
+	if (inst.RA)
+		ADD(32, R(EAX), gpr.R(inst.RA));
+	AND(32, R(EAX), Imm32(Memory::MEMVIEW32_MASK));
+	for (int i = inst.RD; i < 32; i++)
+	{
+		MOV(32, R(ECX), MDisp(EAX, (u32)Memory::base + (i - inst.RD) * 4));
+		BSWAP(32, ECX);
+		MOV(32, gpr.R(i), R(ECX));
+	}
+	gpr.UnlockAllX();
 #endif
 }
 
@@ -477,7 +492,22 @@ void Jit64::stmw(UGeckoInstruction inst)
 	}
 	gpr.UnlockAllX();
 #else
-	Default(inst); return;
+	// x86 (OG Xbox): implement directly instead of Default(inst). The x86 JIT's
+	// interpreter fallback path is broken on Xbox, and the GC OS exception entry
+	// saves r6-r31 with stmw on every interrupt — falling back froze the handler
+	// at 0x8023346C. Fastmem store: [ (addr & MEMVIEW32_MASK) + Memory::base ].
+	gpr.FlushLockX(ECX);
+	MOV(32, R(EAX), Imm32((u32)(s32)inst.SIMM_16));
+	if (inst.RA)
+		ADD(32, R(EAX), gpr.R(inst.RA));
+	AND(32, R(EAX), Imm32(Memory::MEMVIEW32_MASK));
+	for (int i = inst.RD; i < 32; i++)
+	{
+		MOV(32, R(ECX), gpr.R(i));
+		BSWAP(32, ECX);
+		MOV(32, MDisp(EAX, (u32)Memory::base + (i - inst.RD) * 4), R(ECX));
+	}
+	gpr.UnlockAllX();
 #endif
 }
 

@@ -5,6 +5,10 @@
 #include "Thread.h"
 #include "Common.h"
 
+#ifdef _WIN32
+#include <windows.h> // Sleep/GetCurrentThread/... (shim -> xtl.h on Xbox)
+#endif
+
 #ifdef __APPLE__
 #include <mach/mach.h>
 #elif defined BSD4_4
@@ -49,7 +53,11 @@ void SleepCurrentThread(int ms)
 
 void SwitchCurrentThread()
 {
+#ifdef _XBOX
+	Sleep(0); // no SwitchToThread on the Xbox kernel; yield remainder of slice
+#else
 	SwitchToThread();
+#endif
 }
 
 // Sets the debugger-visible name of the current thread.
@@ -60,6 +68,7 @@ void SwitchCurrentThread()
 // http://msdn.microsoft.com/en-us/library/xcb2z8hs(VS.100).aspx
 void SetCurrentThreadName(const char* szThreadName)
 {
+#ifndef _XBOX
 	static const DWORD MS_VC_EXCEPTION = 0x406D1388;
 
 	#pragma pack(push,8)
@@ -83,6 +92,11 @@ void SetCurrentThreadName(const char* szThreadName)
 	}
 	__except(EXCEPTION_CONTINUE_EXECUTION)
 	{}
+#else
+	// OG Xbox port: the debugger thread-naming exception trick is a desktop
+	// VS debugger convention with no Xbox equivalent.
+	(void)szThreadName;
+#endif
 }
 	
 #else // !WIN32, so must be POSIX threads

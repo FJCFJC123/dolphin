@@ -37,6 +37,11 @@
 #if (_MSC_VER <= 1200)
 typedef   signed short  int16_t;
 typedef unsigned short uint16_t;
+#elif !defined(INT16)
+// OG Xbox port: modern Windows SDK / RXDK put INT16/UINT16 in winnt.h, not
+// basetsd.h (unlike INT32/INT64). Define them directly.
+typedef   signed short  int16_t;
+typedef unsigned short uint16_t;
 #else
 typedef  INT16  int16_t;
 typedef UINT16 uint16_t;

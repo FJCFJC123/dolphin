@@ -135,7 +135,9 @@ LONG NTAPI Handler(PEXCEPTION_POINTERS pPtrs)
 		}
 
 	case EXCEPTION_STACK_OVERFLOW:
+#ifndef _XBOX
 		MessageBox(0, _T("Stack overflow!"), 0,0);
+#endif
 		return EXCEPTION_CONTINUE_SEARCH;
 
 	case EXCEPTION_ILLEGAL_INSTRUCTION:

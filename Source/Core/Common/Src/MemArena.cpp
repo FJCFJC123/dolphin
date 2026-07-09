@@ -53,7 +53,11 @@ int AshmemCreateFileMapping(const char *name, size_t size)
 
 void MemArena::GrabLowMemSpace(size_t size)
 {
-#ifdef _WIN32
+#if defined(_XBOX)
+	// OG Xbox port: one committed backing block; views index into it.
+	m_xbox_backing = (u8*)VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	m_xbox_size = size;
+#elif defined(_WIN32)
 	hMemoryMapping = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)(size), NULL);
 #elif defined(ANDROID)
 	fd = AshmemCreateFileMapping("Dolphin-emu", size);
@@ -75,7 +79,11 @@ void MemArena::GrabLowMemSpace(size_t size)
 
 void MemArena::ReleaseSpace()
 {
-#ifdef _WIN32
+#if defined(_XBOX)
+	if (m_xbox_backing)
+		VirtualFree(m_xbox_backing, 0, MEM_RELEASE);
+	m_xbox_backing = 0;
+#elif defined(_WIN32)
 	CloseHandle(hMemoryMapping);
 	hMemoryMapping = 0;
 #else
@@ -86,7 +94,17 @@ void MemArena::ReleaseSpace()
 
 void *MemArena::CreateView(s64 offset, size_t size, void *base)
 {
-#ifdef _WIN32
+#if defined(_XBOX)
+	// OG Xbox port: no MapViewOfFileEx aliasing yet — return offsets into the
+	// single backing block. Mirror views (MV_MIRROR_PREVIOUS) alias naturally
+	// since they share the block. The `base` hint is ignored (fastmem base+addr
+	// aliasing is the PTE-manipulation follow-up); the software address-
+	// translation (non-fastmem) path does not need fixed high-view addresses.
+	(void)base;
+	if (!m_xbox_backing)
+		return nullptr;
+	return m_xbox_backing + offset;
+#elif defined(_WIN32)
 	return MapViewOfFileEx(hMemoryMapping, FILE_MAP_ALL_ACCESS, 0, (DWORD)((u64)offset), size, base);
 #else
 	void *retval = mmap(
@@ -110,7 +128,10 @@ void *MemArena::CreateView(s64 offset, size_t size, void *base)
 
 void MemArena::ReleaseView(void* view, size_t size)
 {
-#ifdef _WIN32
+#if defined(_XBOX)
+	// Views are offsets into the single backing block; freed in ReleaseSpace.
+	(void)view; (void)size;
+#elif defined(_WIN32)
 	UnmapViewOfFile(view);
 #else
 	munmap(view, size);

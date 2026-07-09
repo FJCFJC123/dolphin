@@ -24,7 +24,20 @@
 #include <linux/cdrom.h>
 #endif
 
-#ifdef _WIN32
+#if defined(_XBOX)
+// OG Xbox port: single fixed DVD device, no drive-letter enumeration.
+bool is_cdrom(const TCHAR* /*drive*/)
+{
+	return true;
+}
+
+std::vector<std::string> cdio_get_devices()
+{
+	std::vector<std::string> drives;
+	drives.push_back("\\Device\\Cdrom0");
+	return drives;
+}
+#elif defined(_WIN32)
 // takes a root drive path, returns true if it is a cdrom drive
 bool is_cdrom(const TCHAR* drive)
 {

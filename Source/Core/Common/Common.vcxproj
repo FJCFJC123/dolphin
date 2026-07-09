@@ -217,6 +217,10 @@
     <ClCompile Include="Src\x64CPUDetect.cpp" />
     <ClCompile Include="Src\x64Emitter.cpp" />
     <ClCompile Include="Src\x64FPURoundMode.cpp" />
+    <ClCompile Include="Src\x64SSE1Thunks.cpp">
+      <!-- Must be x87-only: called from JIT code with live XMM registers -->
+      <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
+    </ClCompile>
     <ClCompile Include="Src\x64Thunk.cpp" />
   </ItemGroup>
   <ItemGroup>

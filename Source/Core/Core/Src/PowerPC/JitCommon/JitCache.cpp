@@ -58,21 +58,46 @@ bool JitBlock::ContainsAddress(u32 em_address)
 		return GetNumBlocks() >= MAX_NUM_BLOCKS - 1;
 	}
 
+#ifdef _XBOX
+extern "C" void xbox_note_stage(const char*);
+#define BSTAGE(s) xbox_note_stage(s)
+#else
+#define BSTAGE(s)
+#endif
+
 	void JitBaseBlockCache::Init()
 	{
+		BSTAGE("blk:enter");
+#ifdef _XBOX
+		MAX_NUM_BLOCKS = 8192;  // pools weren't the bug; modest 8192 (~1.6MB) to keep
+		                        // headroom for the full 32MB RAM restore.
+#else
 		MAX_NUM_BLOCKS = 65536*2;
+#endif
 
 #if defined USE_OPROFILE && USE_OPROFILE
 		agent = op_open_agent();
 #endif
-		blocks = new JitBlock[MAX_NUM_BLOCKS];
-		blockCodePointers = new const u8*[MAX_NUM_BLOCKS];
+		BSTAGE("blk:JitBlock[]"); blocks = new JitBlock[MAX_NUM_BLOCKS];
+		BSTAGE("blk:codeptrs"); blockCodePointers = new const u8*[MAX_NUM_BLOCKS];
 #ifdef JIT_UNLIMITED_ICACHE
+		BSTAGE("blk:iCache");
 		if (iCache == 0 && iCacheEx == 0 && iCacheVMEM == 0)
 		{
+#ifdef _XBOX
+			// OG Xbox port: a GameCube title executes code only from main RAM
+			// (iCache), and GC RAM is 24MB (REALRAM) — so a 24MB iCache covers all
+			// reachable indices (mask stays 32MB; GC addrs are <24MB). The EXRAM
+			// (Wii, 64MB) and VMEM (32MB) shadows are never indexed for GC. This
+			// fits the 128MB budget alongside GC RAM + the (8MB) JIT code space.
+			iCache = new u8[0x1800000];   // 24MB
+			iCacheEx = new u8[0x1000];
+			iCacheVMEM = new u8[0x1000];
+#else
 			iCache = new u8[JIT_ICACHE_SIZE];
 			iCacheEx = new u8[JIT_ICACHEEX_SIZE];
 			iCacheVMEM = new u8[JIT_ICACHE_SIZE];
+#endif
 		}
 		else
 		{
@@ -82,11 +107,27 @@ bool JitBlock::ContainsAddress(u32 em_address)
 		{
 			PanicAlert("JitBaseBlockCache::Init() - unable to allocate iCache");
 		}
+		BSTAGE("blk:memset");
+		{
+			extern void memprof(const char*, size_t);
+			memprof("JIT-blocks", MAX_NUM_BLOCKS * sizeof(JitBlock));
+			memprof("JIT-blockPtrs", MAX_NUM_BLOCKS * sizeof(u8*));
+			memprof("JIT-iCache", JIT_ICACHE_SIZE);
+#ifndef _XBOX
+			memprof("JIT-iCacheEx", JIT_ICACHEEX_SIZE);
+			memprof("JIT-iCacheVMEM", JIT_ICACHE_SIZE);
+#endif
+		}
+#ifdef _XBOX
+		memset(iCache, JIT_ICACHE_INVALID_BYTE, 0x1800000); // 24MB (matches alloc)
+#else
 		memset(iCache, JIT_ICACHE_INVALID_BYTE, JIT_ICACHE_SIZE);
 		memset(iCacheEx, JIT_ICACHE_INVALID_BYTE, JIT_ICACHEEX_SIZE);
 		memset(iCacheVMEM, JIT_ICACHE_INVALID_BYTE, JIT_ICACHE_SIZE);
 #endif
-		Clear();
+#endif
+		BSTAGE("blk:Clear"); Clear();
+		BSTAGE("blk:done");
 	}
 
 	void JitBaseBlockCache::Shutdown()
@@ -141,9 +182,13 @@ bool JitBlock::ContainsAddress(u32 em_address)
 	void JitBaseBlockCache::ClearSafe()
 	{
 #ifdef JIT_UNLIMITED_ICACHE
+#ifdef _XBOX
+		memset(iCache, JIT_ICACHE_INVALID_BYTE, 0x1800000); // 24MB (matches alloc)
+#else
 		memset(iCache, JIT_ICACHE_INVALID_BYTE, JIT_ICACHE_SIZE);
 		memset(iCacheEx, JIT_ICACHE_INVALID_BYTE, JIT_ICACHEEX_SIZE);
 		memset(iCacheVMEM, JIT_ICACHE_INVALID_BYTE, JIT_ICACHE_SIZE);
+#endif
 #endif
 	}
 

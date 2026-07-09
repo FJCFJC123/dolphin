@@ -22,7 +22,14 @@ namespace DebugUtil
 u32 skipFrames = 0;
 bool drawingHwTriangles = false;
 
+// OG Xbox port: 40 debug dump buffers = 51.6MB of .bss, which blows the XBE
+// preload limit (IM1037) and most of the console's RAM. One buffer keeps the
+// code paths compiling; the hires-object-dump debug feature is desktop-only.
+#ifdef _XBOX
+enum { NumObjectBuffers = 1};
+#else
 enum { NumObjectBuffers = 40};
+#endif
 
 u32 ObjectBuffer[NumObjectBuffers][EFB_WIDTH*EFB_HEIGHT];
 u32 TempBuffer[NumObjectBuffers];

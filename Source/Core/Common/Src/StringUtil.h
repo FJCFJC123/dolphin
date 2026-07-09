@@ -40,7 +40,11 @@ std::string ThousandSeparate(I value, int spaces = 0)
 	std::ostringstream oss;
 
 // std::locale("") seems to be broken on many platforms
-#if defined _WIN32 || (defined __linux__ && !defined __clang__)
+// OG Xbox port: the NAMED user-default locale walks RXDK's localeconv/
+// __updatetmbcinfo -> lstrcatW and faults (our xbox_locale.cpp only backs the
+// CLASSIC locale). Skip the imbue on Xbox; the classic locale is fine here (we
+// just lose the thousands separator in size strings — cosmetic).
+#if (defined _WIN32 && !defined _XBOX) || (defined __linux__ && !defined __clang__)
 	oss.imbue(std::locale(""));
 #endif
 	oss << std::setw(spaces) << value;

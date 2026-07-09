@@ -10,9 +10,11 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#ifndef _XBOX
 #include <shlobj.h>		// for SHGetFolderPath
 #include <shellapi.h>
 #include <commdlg.h>	// for GetSaveFileName
+#endif
 #include <io.h>
 #include <direct.h>		// getcwd
 #else
@@ -46,6 +48,17 @@
 // This namespace has various generic functions related to files and paths.
 // The code still needs a ton of cleanup.
 // REMEMBER: strdup considered harmful!
+#ifdef _XBOX
+// Writable HDD drive chosen by the boot probe in main_xbox.cpp (default E:).
+extern "C" char g_xbox_user_drive[8];
+// Records the last path the file layer touched (crash-screen diagnostic).
+extern "C" void xbox_note_path(const char* p);
+// NT native-API file access (device paths), bypassing the Xbox drive resolver
+// that faults on the emu thread. See xbox_crt_file_shim.cpp.
+extern "C" void* xbox_nt_open(const char* path, unsigned long access, unsigned long creation);
+extern "C" unsigned long xbox_nt_attrs(const char* path);
+#endif
+
 namespace File
 {
 
@@ -63,8 +76,25 @@ static void StripTailDirSlashes(std::string &fname)
 }
 
 // Returns true if file filename exists
+#ifdef _XBOX
+// OG Xbox port: raw-Win32 path helpers (GetFileAttributes) — the CRT stat/
+// _tstat64 path routes through the D: resolver and faults off the main thread.
+static DWORD xbox_attrs(const std::string& filename)
+{
+	std::string p(filename);
+	StripTailDirSlashes(p);
+	for (size_t i = 0; i < p.size(); ++i)
+		if (p[i] == '/') p[i] = '\\';
+	xbox_note_path(p.c_str());
+	return xbox_nt_attrs(p.c_str());
+}
+#endif
+
 bool Exists(const std::string &filename)
 {
+#ifdef _XBOX
+	return xbox_attrs(filename) != 0xFFFFFFFF;
+#else
 	struct stat64 file_info;
 
 	std::string copy(filename);
@@ -77,11 +107,16 @@ bool Exists(const std::string &filename)
 #endif
 
 	return (result == 0);
+#endif
 }
 
 // Returns true if filename is a directory
 bool IsDirectory(const std::string &filename)
 {
+#ifdef _XBOX
+	DWORD a = xbox_attrs(filename);
+	return a != 0xFFFFFFFF && (a & FILE_ATTRIBUTE_DIRECTORY) != 0;
+#else
 	struct stat64 file_info;
 
 	std::string copy(filename);
@@ -94,12 +129,13 @@ bool IsDirectory(const std::string &filename)
 #endif
 
 	if (result < 0) {
-		WARN_LOG(COMMON, "IsDirectory: stat failed on %s: %s", 
+		WARN_LOG(COMMON, "IsDirectory: stat failed on %s: %s",
 				 filename.c_str(), GetLastErrorMsg());
 		return false;
 	}
 
 	return S_ISDIR(file_info.st_mode);
+#endif // !_XBOX
 }
 
 // Deletes a given filename, return true on success
@@ -123,10 +159,13 @@ bool Delete(const std::string &filename)
 		return false;
 	}
 
+#ifdef _XBOX
+	xbox_note_path((std::string("Delete>") + filename).c_str());
+#endif
 #ifdef _WIN32
 	if (!DeleteFile(UTF8ToTStr(filename).c_str()))
 	{
-		WARN_LOG(COMMON, "Delete: DeleteFile failed on %s: %s", 
+		WARN_LOG(COMMON, "Delete: DeleteFile failed on %s: %s",
 				 filename.c_str(), GetLastErrorMsg());
 		return false;
 	}
@@ -145,6 +184,9 @@ bool Delete(const std::string &filename)
 bool CreateDir(const std::string &path)
 {
 	INFO_LOG(COMMON, "CreateDir: directory %s", path.c_str());
+#ifdef _XBOX
+	xbox_note_path((std::string("CreateDir>") + path).c_str());
+#endif
 #ifdef _WIN32
 	if (::CreateDirectory(UTF8ToTStr(path).c_str(), NULL))
 		return true;
@@ -345,6 +387,9 @@ u64 GetSize(const std::string &filename)
 	}
 	
 	struct stat64 buf;
+#ifdef _XBOX
+	xbox_note_path((std::string("GetSize>") + filename).c_str());
+#endif
 #ifdef _WIN32
 	if (_tstat64(UTF8ToTStr(filename).c_str(), &buf) == 0)
 #else
@@ -413,6 +458,9 @@ bool CreateEmptyFile(const std::string &filename)
 u32 ScanDirectoryTree(const std::string &directory, FSTEntry& parentEntry)
 {
 	INFO_LOG(COMMON, "ScanDirectoryTree: directory %s", directory.c_str());
+#ifdef _XBOX
+	xbox_note_path((std::string("ScanDir>") + directory).c_str());
+#endif
 	// How many files + directories we found
 	u32 foundEntries = 0;
 #ifdef _WIN32
@@ -649,10 +697,15 @@ std::string& GetExeDirectory()
 	static std::string DolphinPath;
 	if (DolphinPath.empty())
 	{
+#ifdef _XBOX
+		// OG Xbox port: the title always runs from the disc/mount root.
+		DolphinPath = "D:";
+#else
 		TCHAR Dolphin_exe_Path[2048];
 		GetModuleFileName(NULL, Dolphin_exe_Path, 2048);
 		DolphinPath = TStrToUTF8(Dolphin_exe_Path);
 		DolphinPath = DolphinPath.substr(0, DolphinPath.find_last_of('\\'));
+#endif
 	}
 	return DolphinPath;
 }
@@ -662,7 +715,12 @@ std::string GetSysDirectory()
 {
 	std::string sysDir;
 
-#if defined (__APPLE__)
+#if defined (_XBOX)
+	// OG Xbox port: Sys is copied from the read-only DVD (D:) to the writable
+	// HDD partition at boot (see main_xbox). Reading it from D: crashes the
+	// Xbox D: drive resolver when opened off the main thread.
+	sysDir = std::string(g_xbox_user_drive) + DIR_SEP "Dolphin" DIR_SEP SYSDATA_DIR;
+#elif defined (__APPLE__)
 	sysDir = GetBundleDirectory() + DIR_SEP + SYSDATA_DIR;
 #elif defined (_WIN32)
 	sysDir = GetExeDirectory() + DIR_SEP + SYSDATA_DIR;
@@ -698,6 +756,7 @@ const std::string& GetUserPath(const unsigned int DirIDX, const std::string &new
 		// 5. Default
 		//    -> Use GetExeDirectory()\User
 
+#ifndef _XBOX
 		// Check our registry keys
 		HKEY hkey;
 		DWORD local = 0;
@@ -719,7 +778,23 @@ const std::string& GetUserPath(const unsigned int DirIDX, const std::string &new
 		// Get Program Files path in case we need it.
 		TCHAR my_documents[MAX_PATH];
 		bool my_documents_found = SUCCEEDED(SHGetFolderPath(NULL, CSIDL_MYDOCUMENTS, NULL, SHGFP_TYPE_CURRENT, my_documents));
+#else
+		// OG Xbox port: no registry / My Documents. Fall through to Case 5
+		// (the game/exe directory's User folder).
+		DWORD local = 0;
+		TCHAR configPath[MAX_PATH] = {0};
+		TCHAR my_documents[MAX_PATH] = {0};
+		bool my_documents_found = false;
+#endif
 
+#ifdef _XBOX
+		// OG Xbox port: the XBE + Sys live on the read-only DVD (D:), so the
+		// writable user tree (config, saves, cache, logs) must go to the HDD.
+		// E: (Partition1) is auto-mounted and writable even on a DVD boot.
+		(void)local; (void)configPath; (void)my_documents; (void)my_documents_found;
+		paths[D_USER_IDX] = std::string(g_xbox_user_drive) + DIR_SEP "Dolphin"
+		                    DIR_SEP USERDATA_DIR DIR_SEP;
+#else
 		if (local) // Case 1-2
 			paths[D_USER_IDX] = GetExeDirectory() + DIR_SEP USERDATA_DIR DIR_SEP;
 		else if (configPath[0]) // Case 3
@@ -728,6 +803,7 @@ const std::string& GetUserPath(const unsigned int DirIDX, const std::string &new
 			paths[D_USER_IDX] = TStrToUTF8(my_documents) + DIR_SEP "Dolphin Emulator" DIR_SEP;
 		else // Case 5
 			paths[D_USER_IDX] = GetExeDirectory() + DIR_SEP USERDATA_DIR DIR_SEP;
+#endif
 
 		// Prettify the path: it will be displayed in some places, we don't want a mix of \ and /.
 		paths[D_USER_IDX] = ReplaceAll(paths[D_USER_IDX], "\\", DIR_SEP);
@@ -959,7 +1035,38 @@ void IOFile::Swap(IOFile& other)
 bool IOFile::Open(const std::string& filename, const char openmode[])
 {
 	Close();
-#ifdef _WIN32
+#ifdef _XBOX
+	// OG Xbox port: raw Win32 CreateFile — the RXDK CRT stdio (fopen/FILE*/
+	// fread buffering, C++ filebuf) is unusable. m_file stores the HANDLE.
+	bool r = false, w = false, a = false, plus = false;
+	for (const char* p = openmode; *p; ++p)
+	{
+		if (*p == 'r') r = true;
+		else if (*p == 'w') w = true;
+		else if (*p == 'a') a = true;
+		else if (*p == '+') plus = true;
+	}
+	DWORD access = 0;
+	if (r) access |= GENERIC_READ;
+	if (w || a) access |= GENERIC_WRITE;
+	if (plus) access |= GENERIC_READ | GENERIC_WRITE;
+	DWORD creation = w ? CREATE_ALWAYS : a ? OPEN_ALWAYS : OPEN_EXISTING;
+
+	// Normalize '/' -> '\\' (DIR_SEP is '/'); the Xbox drive resolver needs '\\'.
+	std::string path = filename;
+	for (size_t i = 0; i < path.size(); ++i)
+		if (path[i] == '/') path[i] = '\\';
+	xbox_note_path(path.c_str());
+
+	HANDLE h = (HANDLE)xbox_nt_open(path.c_str(), access, creation);
+	if (h == INVALID_HANDLE_VALUE)
+		m_file = NULL;
+	else
+	{
+		if (a) SetFilePointer(h, 0, NULL, FILE_END);
+		m_file = (std::FILE*)h;
+	}
+#elif defined(_WIN32)
 	_tfopen_s(&m_file, UTF8ToTStr(filename).c_str(), UTF8ToTStr(openmode).c_str());
 #else
 	m_file = fopen(filename.c_str(), openmode);
@@ -971,11 +1078,42 @@ bool IOFile::Open(const std::string& filename, const char openmode[])
 
 bool IOFile::Close()
 {
+#ifdef _XBOX
+	if (!IsOpen() || !CloseHandle((HANDLE)m_file))
+		m_good = false;
+#else
 	if (!IsOpen() || 0 != std::fclose(m_file))
 		m_good = false;
+#endif
 
 	m_file = NULL;
 	return m_good;
+}
+
+size_t IOFile::ReadElems(void* data, size_t elemSize, size_t count)
+{
+	if (!IsOpen() || elemSize == 0) return 0;
+#ifdef _XBOX
+	DWORD got = 0;
+	if (!ReadFile((HANDLE)m_file, data, (DWORD)(elemSize * count), &got, NULL))
+		return 0;
+	return got / elemSize;
+#else
+	return std::fread(data, elemSize, count, m_file);
+#endif
+}
+
+size_t IOFile::WriteElems(const void* data, size_t elemSize, size_t count)
+{
+	if (!IsOpen() || elemSize == 0) return 0;
+#ifdef _XBOX
+	DWORD put = 0;
+	if (!WriteFile((HANDLE)m_file, data, (DWORD)(elemSize * count), &put, NULL))
+		return 0;
+	return put / elemSize;
+#else
+	return std::fwrite(data, elemSize, count, m_file);
+#endif
 }
 
 std::FILE* IOFile::ReleaseHandle()
@@ -994,50 +1132,81 @@ void IOFile::SetHandle(std::FILE* file)
 
 u64 IOFile::GetSize()
 {
-	if (IsOpen())
-		return File::GetSize(m_file);
-	else
-		return 0;
+	if (!IsOpen()) return 0;
+#ifdef _XBOX
+	LARGE_INTEGER sz;
+	if (!GetFileSizeEx((HANDLE)m_file, &sz)) return 0;
+	return (u64)sz.QuadPart;
+#else
+	return File::GetSize(m_file);
+#endif
 }
 
 bool IOFile::Seek(s64 off, int origin)
 {
+#ifdef _XBOX
+	if (IsOpen())
+	{
+		LARGE_INTEGER li; li.QuadPart = off;
+		DWORD method = (origin == SEEK_CUR) ? FILE_CURRENT
+		             : (origin == SEEK_END) ? FILE_END : FILE_BEGIN;
+		li.LowPart = SetFilePointer((HANDLE)m_file, li.LowPart, &li.HighPart, method);
+		if (li.LowPart == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
+			m_good = false;
+	}
+	else m_good = false;
+#else
 	if (!IsOpen() || 0 != fseeko(m_file, off, origin))
 		m_good = false;
-
+#endif
 	return m_good;
 }
 
 u64 IOFile::Tell()
 {
-	if (IsOpen())
-		return ftello(m_file);
-	else
-		return -1;
+	if (!IsOpen()) return -1;
+#ifdef _XBOX
+	LARGE_INTEGER li; li.QuadPart = 0;
+	li.LowPart = SetFilePointer((HANDLE)m_file, 0, &li.HighPart, FILE_CURRENT);
+	return (u64)li.QuadPart;
+#else
+	return ftello(m_file);
+#endif
 }
 
 bool IOFile::Flush()
 {
+#ifdef _XBOX
+	if (!IsOpen() || !FlushFileBuffers((HANDLE)m_file))
+		m_good = false;
+#else
 	if (!IsOpen() || 0 != std::fflush(m_file))
 		m_good = false;
-
+#endif
 	return m_good;
 }
 
 bool IOFile::Resize(u64 size)
 {
+#ifdef _XBOX
+	if (IsOpen())
+	{
+		LARGE_INTEGER li; li.QuadPart = (s64)size;
+		if (!SetFilePointerEx((HANDLE)m_file, li, NULL, FILE_BEGIN) ||
+		    !SetEndOfFile((HANDLE)m_file))
+			m_good = false;
+	}
+	else m_good = false;
+#else
 	if (!IsOpen() || 0 !=
 #ifdef _WIN32
-		// ector: _chsize sucks, not 64-bit safe
-		// F|RES: changed to _chsize_s. i think it is 64-bit safe
 		_chsize_s(_fileno(m_file), size)
 #else
-		// TODO: handle 64bit and growing
 		ftruncate(fileno(m_file), size)
 #endif
 	)
 		m_good = false;
-
+#endif
 	return m_good;
 }
 

@@ -86,7 +86,7 @@ LogManager::LogManager()
 		m_Log[i]->SetEnable(true);
 		m_Log[i]->AddListener(m_fileLog);
 		m_Log[i]->AddListener(m_consoleLog);
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(_XBOX)
 		if (IsDebuggerPresent())
 			m_Log[i]->AddListener(m_debuggerLog);
 #endif
@@ -178,17 +178,25 @@ void LogContainer::Trigger(LogTypes::LOG_LEVELS level, const char *msg)
 
 FileLogListener::FileLogListener(const char *filename)
 {
+	// OG Xbox port: no ofstream file log (RXDK CRT stdio/filebuf is unusable);
+	// logging still reaches the debug channel via DebuggerLogListener.
+#ifndef _XBOX
 	OpenFStream(m_logfile, filename, std::ios::app);
+#endif
 	SetEnable(true);
 }
 
 void FileLogListener::Log(LogTypes::LOG_LEVELS, const char *msg)
 {
+#ifndef _XBOX
 	if (!IsEnabled() || !IsValid())
 		return;
 
 	std::lock_guard<std::mutex> lk(m_log_lock);
 	m_logfile << msg << std::flush;
+#else
+	(void)msg;
+#endif
 }
 
 void DebuggerLogListener::Log(LogTypes::LOG_LEVELS, const char *msg)

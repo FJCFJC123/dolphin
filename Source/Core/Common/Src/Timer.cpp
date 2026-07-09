@@ -122,14 +122,15 @@ std::string Timer::GetTimeElapsedFormatted() const
 // Get current time
 void Timer::IncreaseResolution()
 {
-#ifdef _WIN32
+	// OG Xbox port: no timeBeginPeriod on the Xbox; its scheduler tick is fixed.
+#if defined(_WIN32) && !defined(_XBOX)
 	timeBeginPeriod(1);
 #endif
 }
 
 void Timer::RestoreResolution()
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 	timeEndPeriod(1);
 #endif
 }

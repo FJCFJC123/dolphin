@@ -25,27 +25,34 @@
 #include "../State.h"
 #include "../PowerPC/PPCAnalyst.h"
 
+#ifdef _XBOX
+extern "C" void xbox_note_stage(const char*);
+#define HWSTAGE(s) xbox_note_stage(s)
+#else
+#define HWSTAGE(s)
+#endif
+
 namespace HW
 {
 	void Init()
 	{
-		CoreTiming::Init();
+		HWSTAGE("HW:CoreTiming"); CoreTiming::Init();
 		SystemTimers::PreInit();
 
-		State::Init();
+		HWSTAGE("HW:State"); State::Init();
 
 		// Init the whole Hardware
-		AudioInterface::Init();
-		VideoInterface::Init();
-		SerialInterface::Init();
-		ProcessorInterface::Init();
-		Memory::Init();
-		DSP::Init(SConfig::GetInstance().m_LocalCoreStartupParameter.bDSPHLE);
-		DVDInterface::Init();
-		GPFifo::Init();
-		ExpansionInterface::Init();
-		CCPU::Init(SConfig::GetInstance().m_LocalCoreStartupParameter.iCPUCore);
-		SystemTimers::Init();
+		HWSTAGE("HW:Audio"); AudioInterface::Init();
+		HWSTAGE("HW:Video"); VideoInterface::Init();
+		HWSTAGE("HW:Serial"); SerialInterface::Init();
+		HWSTAGE("HW:PI"); ProcessorInterface::Init();
+		HWSTAGE("HW:Memory"); Memory::Init();
+		HWSTAGE("HW:DSP"); DSP::Init(SConfig::GetInstance().m_LocalCoreStartupParameter.bDSPHLE);
+		HWSTAGE("HW:DVD"); DVDInterface::Init();
+		HWSTAGE("HW:GPFifo"); GPFifo::Init();
+		HWSTAGE("HW:EXI"); ExpansionInterface::Init();
+		HWSTAGE("HW:CCPU/JIT"); CCPU::Init(SConfig::GetInstance().m_LocalCoreStartupParameter.iCPUCore);
+		HWSTAGE("HW:SysTimers"); SystemTimers::Init();
 
 		if (SConfig::GetInstance().m_LocalCoreStartupParameter.bWii)
 		{

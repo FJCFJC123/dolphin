@@ -258,6 +258,12 @@ void Init(bool hle)
 	{
 		// On the GC, ARAM is accessible only through this interface.
 		g_ARAM.wii_mode = false;
+		// TEST 2026-07-07: full 16MB ARAM (matches the working PC build, which
+		// boots Gladius to the menu). Reduced/aliased ARAM is the top suspect for
+		// the Xbox-specific heap corruption — if the game stages asset data
+		// through ARAM, aliased reads feed corrupt bytes into the heap. Restore
+		// to full to confirm/deny. (Interpreter has ~46MB free, so budget is fine;
+		// re-trim for the JIT only after we know this isn't the corruptor.)
 		g_ARAM.size = ARAM_SIZE;
 		g_ARAM.mask = ARAM_MASK;
 		g_ARAM.ptr = (u8 *)AllocateMemoryPages(g_ARAM.size);
@@ -656,9 +662,21 @@ void UpdateDSPSlice(int cycles)
 	}
 }
 
+#ifdef _XBOX
+// Xbox audio-pipeline diagnostics: g_xbox_adma = UpdateAudioDMA fired at all
+// (CoreTiming reaching the audio callback), g_xbox_adma_en = the game's audio
+// DMA is actually enabled+streaming (the path that fires the AID interrupt).
+extern "C" volatile unsigned g_xbox_adma = 0;
+extern "C" volatile unsigned g_xbox_adma_en = 0;
+#endif
+
 // This happens at 4 khz, since 32 bytes at 4khz = 4 bytes at 32 khz (16bit stereo pcm)
 void UpdateAudioDMA()
 {
+#ifdef _XBOX
+	g_xbox_adma++;
+	if (g_audioDMA.AudioDMAControl.Enable && g_audioDMA.BlocksLeft) g_xbox_adma_en++;
+#endif
 	if (g_audioDMA.AudioDMAControl.Enable && g_audioDMA.BlocksLeft)
 	{
 		// Read audio at g_audioDMA.ReadAddress in RAM and push onto an

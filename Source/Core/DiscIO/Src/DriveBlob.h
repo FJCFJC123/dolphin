@@ -10,7 +10,9 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <winioctl.h>
+#ifndef _XBOX
+#include <winioctl.h> // physical-drive IOCTL — no raw drive access on Xbox
+#endif
 #endif
 
 namespace DiscIO
@@ -24,7 +26,9 @@ private:
 
 #ifdef _WIN32
 	HANDLE hDisc;
+#ifndef _XBOX
 	PREVENT_MEDIA_REMOVAL pmrLockCDROM;
+#endif
 	bool IsOK() {return hDisc != INVALID_HANDLE_VALUE;}
 #else
 	File::IOFile file_;

@@ -17,6 +17,12 @@
 	#include <errno.h>
 #endif
 
+#if defined(_XBOX)
+	#include <stdarg.h>
+	// Locale-free formatter (wvsprintfA wrapper) defined in xbox_crt_file_shim.cpp.
+	extern "C" int xbox_vformat(char* out, const char* fmt, va_list args);
+#endif
+
 // faster than sscanf
 bool AsciiToHex(const char* _szValue, u32& result)
 {
@@ -34,7 +40,13 @@ bool CharArrayFromFormatV(char* out, int outsize, const char* format, va_list ar
 {
 	int writtenCount;
 
-#ifdef _WIN32
+#if defined(_XBOX)
+	// RXDK's CRT printf-family (vsnprintf/_vsnprintf_l/_vscprintf) all walk the
+	// mbc/locale tables via __updatetmbcinfo, which faults on our fake _locale_t.
+	// Route through wvsprintfA (locale-free Win32 formatter) instead. No floats.
+	writtenCount = xbox_vformat(out, format, args);
+	(void)outsize;
+#elif defined(_WIN32) && !defined(_XBOX)
 	// You would think *printf are simple, right? Iterate on each character,
 	// if it's a format specifier handle it properly, etc.
 	//
@@ -82,7 +94,15 @@ std::string StringFromFormat(const char* format, ...)
 {
 	va_list args;
 	char *buf = NULL;
-#ifdef _WIN32
+#if defined(_XBOX)
+	// _vscprintf hits the same locale/mbc fault as vsnprintf; use a fixed buffer
+	// + the (now locale-free) CharArrayFromFormatV. wvsprintfA caps near 1024.
+	char stackbuf[2048];
+	va_start(args, format);
+	CharArrayFromFormatV(stackbuf, sizeof(stackbuf), format, args);
+	va_end(args);
+	std::string temp = stackbuf;
+#elif defined(_WIN32)
 	int required = 0;
 
 	va_start(args, format);

@@ -88,13 +88,16 @@ inline u64 _rotr64(u64 x, unsigned int shift){
 }
 
 #else // WIN32
+#include <locale.h>
 // Function Cross-Compatibility
 	#define strcasecmp _stricmp
 	#define strncasecmp _strnicmp
 	#define unlink _unlink
+#if defined(_MSC_VER) && _MSC_VER < 1900
 	#define snprintf _snprintf
+#endif
 	#define vscprintf _vscprintf
-	
+
 // Locale Cross-Compatibility
 	#define locale_t _locale_t
 	#define freelocale _free_locale
@@ -126,9 +129,12 @@ inline u64 _rotr64(u64 x, unsigned int shift){
 			// Configure the thread to set the locale only for this thread
 			_configthreadlocale(_ENABLE_PER_THREAD_LOCALE);
 
-			// Set all locale categories
-			for(int i = LC_MIN; i <= LC_MAX; i++)
-				setlocale(i, new_locale->locinfo->lc_category[i].locale);
+			// The modern UCRT keeps _locale_t internals opaque, so the
+			// original per-category copy from new_locale is impossible.
+			// Every Dolphin caller passes newlocale(LC_NUMERIC_MASK, "C", NULL)
+			// (locale-independent float printing in shader generators), so
+			// setting LC_NUMERIC to "C" preserves the intended behavior.
+			setlocale(LC_NUMERIC, "C");
 		}
 
 		return old_locale;

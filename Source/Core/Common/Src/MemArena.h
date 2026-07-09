@@ -28,7 +28,13 @@ public:
 	static u8 *Find4GBBase();
 private:
 
-#ifdef _WIN32
+#if defined(_XBOX)
+	// OG Xbox port: single VirtualAlloc'd backing block (no CreateFileMapping /
+	// MapViewOfFileEx on the Xbox kernel). True multi-address mirror aliasing is
+	// a runtime follow-up via PTE manipulation (cf. the PS1 port's fastmem).
+	u8* m_xbox_backing;
+	size_t m_xbox_size;
+#elif defined(_WIN32)
 	HANDLE hMemoryMapping;
 #else
 	int fd;

@@ -149,15 +149,31 @@ ps_adds1
 
 */
 
+#ifdef _XBOX
+// OG Xbox port: 128MB total. The default 32MB code space + 32MB iCache + block
+// array + 32MB GC RAM + 15MB image leaves no room (iCache alloc fails). 8MB code
+// space fits the budget with headroom; the JIT just recompiles a bit more often.
+static int CODE_SIZE = 1024*1024*4;  // pools weren't the bug; back to 4MB to free
+                                     // headroom for the full 32MB RAM restore.
+#else
 static int CODE_SIZE = 1024*1024*32;
+#endif
 
 namespace CPUCompare
 {
 	extern u32 m_BlockStart;
 }
 
+#ifdef _XBOX
+extern "C" void xbox_note_stage(const char*);
+#define JSTAGE(s) xbox_note_stage(s)
+#else
+#define JSTAGE(s)
+#endif
+
 void Jit64::Init()
 {
+	JSTAGE("JIT:enter");
 	jo.optimizeStack = true;
 	/* This will enable block linking in JitBlockCache::FinalizeBlock(), it gives faster execution but may not
 	   be as stable as the alternative (to not link the blocks). However, I have not heard about any good examples
@@ -187,11 +203,12 @@ void Jit64::Init()
 	gpr.SetEmitter(this);
 	fpr.SetEmitter(this);
 
-	trampolines.Init();
-	AllocCodeSpace(CODE_SIZE);
+	JSTAGE("JIT:trampolines"); trampolines.Init();
+	JSTAGE("JIT:AllocCode");   AllocCodeSpace(CODE_SIZE);
 
-	blocks.Init();
-	asm_routines.Init();
+	JSTAGE("JIT:blocks");      blocks.Init();
+	JSTAGE("JIT:asm");         asm_routines.Init();
+	JSTAGE("JIT:done");
 }
 
 void Jit64::ClearCache() 

@@ -40,7 +40,9 @@ TextureCache::TCacheEntryBase::~TCacheEntryBase()
 
 TextureCache::TextureCache()
 {
-	temp_size = 2048 * 2048 * 4;
+	// OG Xbox 128MB budget: 4MB scratch (was 2048*2048*4 = 16MB). GameCube
+	// textures are at most 1024x1024, so a 1024x1024 RGBA temp is sufficient.
+	temp_size = 1024 * 1024 * 4;
 	if (!temp)
 		temp = (u8*)AllocateAlignedMemory(temp_size, 16);
 

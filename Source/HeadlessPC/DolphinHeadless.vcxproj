@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B7E2A4D1-4F6C-4E8A-9C3D-1A2B3C4D5E6F}</ProjectGuid>
+    <RootNamespace>DolphinHeadless</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <OutDir>$(ProjectDir)Win32\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)Win32\$(Configuration)\obj\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>..\Core\Common\Src;..\Core\Core\Src;..\Core\VideoCommon\Src;..\Core\AudioCommon\Src;..\Core\DiscIO\Src;..\Core\InputCommon\Src;..\..\Externals;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;USE_UPNP;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <Optimization>MaxSpeed</Optimization>
+      <!-- Must match the core libs' ABI: Base.props builds with /Zp16 /GS- /GR- /arch:SSE2 -->
+      <StructMemberAlignment>16Bytes</StructMemberAlignment>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(DXSDK_DIR)Lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>
+        ..\Core\Core\Win32\Release\Core.lib;
+        ..\Core\VideoCommon\Win32\Release\VideoCommon.lib;
+        ..\Core\AudioCommon\Win32\Release\AudioCommon.lib;
+        ..\Core\DiscIO\Win32\Release\DiscIO.lib;
+        ..\Core\InputCommon\Win32\Release\InputCommon.lib;
+        ..\Core\Common\Win32\Release\Common.lib;
+        ..\Plugins\Plugin_VideoDX9\Win32\Release\VideoDX9.lib;
+        ..\Plugins\Plugin_VideoSoftware\Win32\Release\VideoSoftware.lib;
+        ..\..\Externals\Bochs_disasm\Win32\Release\Bochs_disasm.lib;
+        ..\..\Externals\zlib\Win32\Release\zlib.lib;
+        ..\..\Externals\LZO\Win32\Release\LZO.lib;
+        ..\..\Externals\libpng\png\Win32\Release\png.lib;
+        ..\..\Externals\SOIL\Win32\Release\SOIL.lib;
+        ..\..\Externals\SFML\build\vc2010\Win32\Release\SFML_Network.lib;
+        ..\..\Externals\polarssl\visualc\VS2010\Win32\Release\PolarSSL.lib;
+        ..\..\Externals\CLRun\clrun\Win32\Release\CLRun.lib;
+        d3d9.lib;d3dx9.lib;dsound.lib;dxguid.lib;dinput8.lib;xinput9_1_0.lib;
+        vfw32.lib;legacy_stdio_definitions.lib;
+        opengl32.lib;winmm.lib;ws2_32.lib;iphlpapi.lib;setupapi.lib;hid.lib;
+        bthprops.lib;comctl32.lib;shlwapi.lib;version.lib;%(AdditionalDependencies)
+      </AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="HeadlessMain.cpp" />
+    <ClCompile Include="libusb_stub.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

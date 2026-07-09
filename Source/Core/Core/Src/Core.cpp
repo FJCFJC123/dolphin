@@ -78,6 +78,9 @@ void Callback_WiimoteInterruptChannel(int _number, u16 _channelID, const void* _
 
 // Function declarations
 void EmuThread();
+#ifdef _XBOX
+extern "C" void xbox_spawn_cpu(void (*)(void)); // spawn CPU loop off the main thread (test)
+#endif
 
 bool g_bStopping = false;
 bool g_bHwInit = false;
@@ -89,6 +92,13 @@ std::thread g_EmuThread;
 static std::thread g_cpu_thread;
 static bool g_requestRefreshInfo = false;
 static int g_pauseAndLockDepth = 0;
+
+#ifdef _XBOX
+extern "C" void xbox_note_stage(const char*);
+#define XSTAGE(s) xbox_note_stage(s)
+#else
+#define XSTAGE(s)
+#endif
 
 SCoreStartupParameter g_CoreStartupParameter;
 bool isTabPressed = false;
@@ -218,7 +228,16 @@ bool Init()
 	g_pWindowHandle = Host_GetRenderHandle();
 
 	// Start the emu thread
+#ifdef _XBOX
+	// OG Xbox port: run emulation on the MAIN thread. Dolphin's std::thread emu
+	// thread lacks the Xbox per-thread Xapi init that the main thread has, so
+	// xapilib drive/content functions fault on it (per-thread NULL buffers).
+	// Running inline on the already-initialized main thread avoids the whole
+	// family at once. This blocks until powerdown.
+	EmuThread();
+#else
 	g_EmuThread = std::thread(EmuThread);
+#endif
 
 	return true;
 }
@@ -299,7 +318,9 @@ void CpuThread()
 	else
 	{
 		Common::SetCurrentThreadName("CPU-GPU thread");
+		XSTAGE("Video_Prepare");
 		g_video_backend->Video_Prepare();
+		XSTAGE("VideoPrepared");
 	}
 
 	#if defined(_M_X64) || _M_ARM
@@ -323,6 +344,7 @@ void CpuThread()
 	#endif
 
 	// Enter CPU run loop. When we leave it - we are done.
+	XSTAGE("CCPU::Run");
 	CCPU::Run();
 
 	g_bStarted = false;
@@ -369,6 +391,7 @@ void FifoPlayerThread()
 // See the BootManager.cpp file description for a complete call schedule.
 void EmuThread()
 {
+	XSTAGE("EmuThread");
 	const SCoreStartupParameter& _CoreParameter =
 		SConfig::GetInstance().m_LocalCoreStartupParameter;
 
@@ -380,8 +403,10 @@ void EmuThread()
 
 	Movie::Init();
 
+	XSTAGE("HW::Init");
 	HW::Init();
 
+	XSTAGE("Video::Init");
 	if (!g_video_backend->Initialize(g_pWindowHandle))
 	{
 		PanicAlert("Failed to initialize video backend!");
@@ -391,6 +416,7 @@ void EmuThread()
 
 	OSD::AddMessage("Dolphin " + g_video_backend->GetName() + " Video Backend.", 5000);
 
+	XSTAGE("DSP::Init");
 	if (!DSP::GetDSPEmulator()->Initialize(g_pWindowHandle,
 				_CoreParameter.bWii, _CoreParameter.bDSPThread))
 	{
@@ -401,6 +427,7 @@ void EmuThread()
 		return;
 	}
 
+	XSTAGE("Pad::Init");
 	Pad::Initialize(g_pWindowHandle);
 	// Load and Init Wiimotes - only if we are booting in wii mode
 	if (g_CoreStartupParameter.bWii)
@@ -423,14 +450,26 @@ void EmuThread()
 	// Load GCM/DOL/ELF whatever ... we boot with the interpreter core
 	PowerPC::SetMode(PowerPC::MODE_INTERPRETER);
 
+	XSTAGE("CBoot::BootUp");
 	CBoot::BootUp();
+	XSTAGE("Booted-CpuLoop");
 
 	// Setup our core, but can't use dynarec if we are compare server
+#ifdef _XBOX
+	// OG Xbox port: respect iCPUCore (main_xbox sets it). 1 = JIT recompiler,
+	// 0 = interpreter. (The old locale/std::locale("") init crash that looked like
+	// "JIT corrupts memory" is fixed; JIT is now testable.)
+	if (_CoreParameter.iCPUCore)
+		PowerPC::SetMode(PowerPC::MODE_JIT);
+	else
+		PowerPC::SetMode(PowerPC::MODE_INTERPRETER);
+#else
 	if (_CoreParameter.iCPUCore && (!_CoreParameter.bRunCompareServer ||
 					_CoreParameter.bRunCompareClient))
 		PowerPC::SetMode(PowerPC::MODE_JIT);
 	else
 		PowerPC::SetMode(PowerPC::MODE_INTERPRETER);
+#endif
 
 	// Update the window again because all stuff is initialized
 	Host_UpdateDisasmDialog();
@@ -470,6 +509,12 @@ void EmuThread()
 		// because noone is pumping messages.
 		Common::SetCurrentThreadName("Emuthread - Idle");
 
+#ifdef _XBOX
+		// Threading test done (inline vs spawned made no difference to 0x8023346C).
+		// Back to inline on the main thread so D3D (main-thread-affine) works and we
+		// get a clean run now that the load-store/system-reg JIT bug is bypassed.
+		cpuThreadFunc();
+#else
 		// Spawn the CPU+GPU thread
 		g_cpu_thread = std::thread(cpuThreadFunc);
 
@@ -478,6 +523,7 @@ void EmuThread()
 			g_video_backend->PeekMessages();
 			Common::SleepCurrentThread(20);
 		}
+#endif
 	}
 
 	// Wait for g_cpu_thread to exit
@@ -489,7 +535,8 @@ void EmuThread()
 	INFO_LOG(CONSOLE, "%s", StopMessage(true, "GDB stopped.").c_str());
 	#endif
 
-	g_cpu_thread.join();
+	if (g_cpu_thread.joinable())  // OG Xbox port: not spawned in inline single-core
+		g_cpu_thread.join();
 
 	INFO_LOG(CONSOLE, "%s", StopMessage(true, "CPU thread stopped.").c_str());
 

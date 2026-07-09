@@ -8,7 +8,9 @@
 #include <map>
 
 #include "BPMemLoader.h"
+#ifndef _XBOX
 #include "../../Plugin_VideoOGL/Src/GLUtil.h"
+#endif
 
 struct OutputVertexData;
 
@@ -26,12 +28,13 @@ namespace HwRasterizer
 
 	void Clear();
 
+#ifndef _XBOX
 	struct TexCacheEntry
 	{
-		TexImage0 texImage0; 
-		TexImage1 texImage1; 
-		TexImage2 texImage2; 
-		TexImage3 texImage3; 
+		TexImage0 texImage0;
+		TexImage1 texImage1;
+		TexImage2 texImage2;
+		TexImage3 texImage3;
 		TexTLUT texTlut;
 
 		GLuint texture;
@@ -45,6 +48,7 @@ namespace HwRasterizer
 
 	typedef std::map<u32, TexCacheEntry> TextureCache;
 	static TextureCache textures;
+#endif // !_XBOX
 }
 
 #endif 

@@ -90,8 +90,15 @@ CEXIMemoryCard::CEXIMemoryCard(const int index)
 	}
 	else
 	{
+#ifdef _XBOX
+		// OG Xbox 128MB budget: smallest GC card (4Mb = 512KB) instead of the
+		// 128Mb (16MB) default — that 16MB was starving the JIT (the memory map
+		// showed EXI::Init eating ~16MB). Gladius boots fine with a 512KB card.
+		nintendo_card_id = 0x00000004;
+#else
 		// Create a new 128Mb memcard
 		nintendo_card_id = 0x00000080;
+#endif
 		memory_card_size = nintendo_card_id * SIZE_TO_Mb;
 
 		memory_card_content = new u8[memory_card_size];
@@ -154,9 +161,17 @@ void CEXIMemoryCard::Flush(bool exiting)
 	flushData.memcardSize = memory_card_size;
 	flushData.bExiting = exiting;
 
+#ifdef _XBOX
+	// OG Xbox port: run the memcard flush INLINE on the main thread. A std::thread
+	// worker lacks the per-thread Xapi init (XapiInitProcess runs only on the main
+	// thread), so its file-write path-building faults in RtlReAllocateHeap(NULL)
+	// (0xFFFFFFF6). The write is small; synchronous is fine.
+	innerFlush(&flushData);
+#else
 	flushThread = std::thread(innerFlush, &flushData);
 	if (exiting)
 		flushThread.join();
+#endif
 
 	m_bDirty = false;
 }

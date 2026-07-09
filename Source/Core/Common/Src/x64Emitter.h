@@ -239,6 +239,13 @@ private:
 	void WriteBitTest(int bits, OpArg &dest, OpArg &index, int ext);
 	void WriteMXCSR(OpArg arg, int ext);
 	void WriteSSEOp(int size, u8 sseOp, bool packed, X64Reg regOp, OpArg arg, int extrabytes = 0);
+
+	// OG Xbox port: SSE1 fallback helpers (see x64SSE1Fallback.h)
+	void WriteX87Mem(u8 opcode, OpArg arg, int ext);
+	OpArg SSE1SpillSrc64(OpArg src);
+	void SSE1ScalarArith(int ext, X64Reg dst, OpArg src);
+	void SSE1PackedArith(int ext, X64Reg dst, OpArg src);
+	void SSE1Thunk(int op, u8 imm, X64Reg dst, const OpArg *src, int srcBytes);
 	void WriteNormalOp(XEmitter *emit, int bits, NormalOp op, const OpArg &a1, const OpArg &a2);
 
 protected:
@@ -520,6 +527,25 @@ public:
 	void MOVQ_xmm(X64Reg dest, OpArg arg);
 	void MOVD_xmm(const OpArg &arg, X64Reg src);
 	void MOVQ_xmm(OpArg arg, X64Reg src);
+
+	// OG Xbox port: SSE1-only building blocks + x87 ops used by the SSE1
+	// fallback layer (active when cpu_info.bSSE2 is false — Coppermine).
+	void MOVLPS(X64Reg regOp, OpArg arg);   // m64 -> xmm[63:0], upper preserved
+	void MOVLPS(OpArg arg, X64Reg regOp);   // xmm[63:0] -> m64
+	void MOVHPS(X64Reg regOp, OpArg arg);   // m64 -> xmm[127:64]
+	void MOVHPS(OpArg arg, X64Reg regOp);   // xmm[127:64] -> m64
+	void MOVLHPS(X64Reg dest, X64Reg src);  // dest[127:64] = src[63:0]
+	void MOVHLPS(X64Reg dest, X64Reg src);  // dest[63:0] = src[127:64]
+	void FLD32(OpArg arg);
+	void FLD64(OpArg arg);
+	void FSTP32(OpArg arg);
+	void FSTP64(OpArg arg);
+	void FARITH64(int ext, OpArg arg);      // DC /ext: 0=FADD 1=FMUL 4=FSUB 6=FDIV (ST0 op= m64)
+	void FSQRT();
+	void FUCOMIP_ST1();
+	void FSTP_ST0();
+	void PUSHAD();
+	void POPAD();
 
 	// SSE/SSE2: Generates a mask from the high bits of the components of the packed register in question.
 	void MOVMSKPS(X64Reg dest, OpArg arg);

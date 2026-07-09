@@ -9,7 +9,9 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#ifndef _XBOX
 #include <psapi.h>
+#endif
 #else
 #include <errno.h>
 #include <stdio.h>
@@ -24,10 +26,30 @@
 // This is purposely not a full wrapper for virtualalloc/mmap, but it
 // provides exactly the primitive operations that Dolphin needs.
 
+// Memory profiling (PC harness): running total of committed emulator memory,
+// so we can see the full breakdown and trim it to the Xbox 128MB budget.
+size_t g_memprofTotal = 0;
+void memprof(const char* tag, size_t size)
+{
+	g_memprofTotal += size;
+#ifndef _XBOX  // PC harness only; RXDK stdio (fopen) is unusable on Xbox
+	FILE* f = fopen("H:\\OG XBOX Port\\buildlogs\\memprof.txt", "a");
+	if (f)
+	{
+		fprintf(f, "[MEMPROF] %-16s %8u KB   total %6u MB\n",
+		        tag, (unsigned)(size >> 10), (unsigned)(g_memprofTotal >> 20));
+		fclose(f);
+	}
+#else
+	(void)tag;
+#endif
+}
+
 void* AllocateExecutableMemory(size_t size, bool low)
 {
 #if defined(_WIN32)
 	void* ptr = VirtualAlloc(0, size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	memprof("exec-code", size);
 #else
 	static char *map_hint = 0;
 #if defined(__x86_64__) && !defined(MAP_32BIT)
@@ -85,6 +107,7 @@ void* AllocateMemoryPages(size_t size)
 {
 #ifdef _WIN32
 	void* ptr = VirtualAlloc(0, size, MEM_COMMIT, PAGE_READWRITE);
+	memprof("pages", size);
 #else
 	void* ptr = mmap(0, size, PROT_READ | PROT_WRITE,
 			MAP_ANON | MAP_PRIVATE, -1, 0);
@@ -103,6 +126,7 @@ void* AllocateAlignedMemory(size_t size,size_t alignment)
 {
 #ifdef _WIN32
 	void* ptr =  _aligned_malloc(size,alignment);
+	memprof("aligned", size);
 #else
 	void* ptr = NULL;
 #ifdef ANDROID
@@ -174,7 +198,7 @@ void UnWriteProtectMemory(void* ptr, size_t size, bool allowExecute)
 
 std::string MemUsage()
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 #pragma comment(lib, "psapi")
 	DWORD processID = GetCurrentProcessId();
 	HANDLE hProcess;

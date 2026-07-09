@@ -160,11 +160,16 @@ public:
 	bool Open(const std::string& filename, const char openmode[]);
 	bool Close();
 
+	// OG Xbox port: raw byte read/write, routed to Win32 (see FileUtil.cpp)
+	// so the whole IOFile bypasses the unusable RXDK CRT stdio layer.
+	size_t ReadElems(void* data, size_t elemSize, size_t count);
+	size_t WriteElems(const void* data, size_t elemSize, size_t count);
+
 	template <typename T>
 	bool ReadArray(T* data, size_t length, size_t* pReadBytes = NULL)
 	{
 		size_t read_bytes = 0;
-		if (!IsOpen() || length != (read_bytes = std::fread(data, sizeof(T), length, m_file)))
+		if (!IsOpen() || length != (read_bytes = ReadElems(data, sizeof(T), length)))
 			m_good = false;
 
 		if (pReadBytes)
@@ -176,7 +181,7 @@ public:
 	template <typename T>
 	bool WriteArray(const T* data, size_t length)
 	{
-		if (!IsOpen() || length != std::fwrite(data, sizeof(T), length, m_file))
+		if (!IsOpen() || length != WriteElems(data, sizeof(T), length))
 			m_good = false;
 
 		return m_good;
@@ -211,9 +216,13 @@ public:
 	bool Flush();
 
 	// clear error state
+#ifdef _XBOX
+	void Clear() { m_good = true; } // m_file is a Win32 HANDLE, no clearerr
+#else
 	void Clear() { m_good = true; std::clearerr(m_file); }
+#endif
 
-	std::FILE* m_file;
+	std::FILE* m_file; // OG Xbox port: holds a Win32 HANDLE (cast) when _XBOX
 	bool m_good;
 private:
 	IOFile(IOFile&);

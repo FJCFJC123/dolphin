@@ -3,6 +3,9 @@
 // Refer to the license.txt file included.
 
 #include "Common.h"
+#ifdef _WIN32
+#include <windows.h> // FormatMessageA / GetLastError (shim -> xtl.h on Xbox)
+#endif
 
 // Neither Android nor OS X support TLS
 #if  defined(__APPLE__) || (ANDROID && __clang__)

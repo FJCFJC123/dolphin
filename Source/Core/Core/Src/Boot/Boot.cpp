@@ -129,6 +129,11 @@ bool CBoot::FindMapFile(std::string* existing_map_file,
 
 bool CBoot::LoadMapFromFilename()
 {
+#ifdef _XBOX
+	// OG Xbox port: symbol maps are debug-only; skip to isolate a boot-time
+	// fault seen right after the Maps existence check.
+	return false;
+#else
 	std::string strMapFilename;
 	bool found = FindMapFile(&strMapFilename, NULL);
 	if (found && g_symbolDB.LoadMap(strMapFilename.c_str()))
@@ -138,6 +143,7 @@ bool CBoot::LoadMapFromFilename()
 	}
 
 	return false;
+#endif
 }
 
 // If ipl.bin is not found, this function does *some* of what BS1 does: 
@@ -251,6 +257,7 @@ bool CBoot::BootUp()
 		if (_StartupPara.bSkipIdle && !_StartupPara.bEnableDebugging)
 		{
 			PPCAnalyst::FindFunctions(0x80004000, 0x811fffff, &g_symbolDB);
+#ifndef _XBOX
 			SignatureDB db;
 			if (db.Load((File::GetSysDirectory() + TOTALDB).c_str()))
 			{
@@ -258,6 +265,12 @@ bool CBoot::BootUp()
 				HLE::PatchFunctions();
 				db.Clear();
 			}
+#else
+			// OG Xbox port: skip the optional HLE signature DB (totaldb.dsy).
+			// Opening it happens on the emu thread, which faults in the Xbox
+			// drive resolver (per-thread state bug). Boot proceeds from the
+			// already-open ISO handle without more emu-thread file opens.
+#endif
 		}
 
 		/* Try to load the symbol map if there is one, and then scan it for

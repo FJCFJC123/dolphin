@@ -19,7 +19,9 @@ namespace EfbCopy
 {
 	void CopyToXfb()
 	{
-		GLInterface->Update(); // just updates the render window position and the backbuffer size	
+#ifndef _XBOX
+		GLInterface->Update(); // just updates the render window position and the backbuffer size
+#endif
 
 		if (!g_SWVideoConfig.bHwRasterizer)
 		{

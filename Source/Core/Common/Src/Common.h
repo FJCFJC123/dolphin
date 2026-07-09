@@ -76,11 +76,12 @@ private:
 	#define GC_ALIGNED16_DECL(x) __declspec(align(16)) x
 	#define GC_ALIGNED64_DECL(x) __declspec(align(64)) x
 
-// Since they are always around on windows
-	#define HAVE_WX 1
-	#define HAVE_OPENAL 1
+// OG Xbox port: headless build — no wxWidgets, no OpenAL, no portaudio.
+// (Upstream defined all three to 1 "since they are always around on windows".)
+	#define HAVE_WX 0
+	#define HAVE_OPENAL 0
 
-	#define HAVE_PORTAUDIO 1
+	#define HAVE_PORTAUDIO 0
 
 // Debug definitions
 	#if defined(_DEBUG)

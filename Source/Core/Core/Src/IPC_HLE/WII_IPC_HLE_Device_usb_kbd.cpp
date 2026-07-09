@@ -72,7 +72,7 @@ bool CWII_IPC_HLE_Device_usb_kbd::IOCtl(u32 _CommandAddress)
 
 bool CWII_IPC_HLE_Device_usb_kbd::IsKeyPressed(int _Key)
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 	if (GetAsyncKeyState(_Key) & 0x8000)
 		return true;
 	else
@@ -129,7 +129,7 @@ u32 CWII_IPC_HLE_Device_usb_kbd::Update()
 		m_OldKeyBuffer[i] = KeyPressedNow;
 	}
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 	if (GetAsyncKeyState(VK_LCONTROL) & 0x8000)
 		Modifiers |= 0x01;
 	if (GetAsyncKeyState(VK_LSHIFT) & 0x8000)

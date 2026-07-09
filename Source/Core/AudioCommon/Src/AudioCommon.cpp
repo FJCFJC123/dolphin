@@ -29,12 +29,14 @@ namespace AudioCommon
 		std::string backend = SConfig::GetInstance().sBackend;
 		if (backend == BACKEND_OPENAL           && OpenALStream::isValid()) 
 			soundStream = new OpenALStream(mixer);
-		else if (backend == BACKEND_NULLSOUND   && NullSound::isValid()) 
+		else if (backend == BACKEND_NULLSOUND   && NullSound::isValid())
 			soundStream = new NullSound(mixer, hWnd);
-		else if (backend == BACKEND_DIRECTSOUND && DSound::isValid()) 
+#if !defined(_XBOX)
+		else if (backend == BACKEND_DIRECTSOUND && DSound::isValid())
 			soundStream = new DSound(mixer, hWnd);
-		else if (backend == BACKEND_XAUDIO2     && XAudio2::isValid()) 
+		else if (backend == BACKEND_XAUDIO2     && XAudio2::isValid())
 			soundStream = new XAudio2(mixer);
+#endif
 		else if (backend == BACKEND_AOSOUND     && AOSound::isValid()) 
 			soundStream = new AOSound(mixer);
 		else if (backend == BACKEND_ALSA        && AlsaSound::isValid())

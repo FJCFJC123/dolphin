@@ -13,10 +13,11 @@
 #include "Device.h"
 
 // enable disable sources
-#ifdef _WIN32
+// OG Xbox port: no desktop input backends (XInput/DInput/SDL are PC APIs) ->
+// null ControllerInterface. The Xbox pad is wired in separately later.
+#if defined(_WIN32) && !defined(_XBOX)
 	#define CIFACE_USE_XINPUT
 	#define CIFACE_USE_DINPUT
-	#define CIFACE_USE_SDL
 #endif
 #if defined(HAVE_X11) && HAVE_X11
 	#define CIFACE_USE_XLIB

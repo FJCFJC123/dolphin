@@ -27,7 +27,9 @@
 #include "DLCache.h"
 #include "VideoConfig.h"
 
-#define DL_CODE_CACHE_SIZE (1024*1024*16)
+// OG Xbox 128MB budget: 2MB display-list code cache (was 16MB) — trimmed
+// further to fit the 24MB JIT iCache alongside full 16MB ARAM.
+#define DL_CODE_CACHE_SIZE (1024*1024*2)
 #define DL_CODE_CLEAR_THRESHOLD (16 * 1024)
 extern int frameCount;
 static u32 CheckContextId;

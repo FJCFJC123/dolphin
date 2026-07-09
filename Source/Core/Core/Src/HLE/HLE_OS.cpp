@@ -101,13 +101,17 @@ void GetStringVA(std::string& _rOutBuffer, u32 strReg)
 		if (*pString == '%')
 		{
 			char* pArgument = ArgumentBuffer;
+			// OG Xbox port: BOUND the copy. A garbage format string would
+			// otherwise overflow this 256-byte stack buffer (smashing the return
+			// address with GC data) — a candidate CCPU::Run corruption.
+			char* pArgLimit = ArgumentBuffer + sizeof(ArgumentBuffer) - 2;
 			*pArgument++ = *pString++;
 			if(*pString == '%') {
 				_rOutBuffer += "%";
 				pString++;
 				continue;
 			}
-			while(*pString < 'A' || *pString > 'z' || *pString == 'l' || *pString == '-')
+			while((pArgument < pArgLimit) && (*pString < 'A' || *pString > 'z' || *pString == 'l' || *pString == '-'))
 				*pArgument++ = *pString++;
 
 			*pArgument++ = *pString;

@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <ProjectGuid>{D01F4100-0000-4000-8000-00000000D01F}</ProjectGuid>
+    <RootNamespace>DolphinXbox</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>Dolphin-Xbox</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <!-- Bring-up phase: StaticLibrary = compile-only, shake out per-file RXDK
+       compile errors across the Common foundation with no link/entry noise.
+       Flip to Application + XDK shell once the core compiles (as Flycast-X did). -->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>NotSet</CharacterSet>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup Label="UserMacros">
+    <DOLSRC>$(ProjectDir)..\Core</DOLSRC>
+  </PropertyGroup>
+  <!-- Include order is load-bearing (Flycast-X lesson): modern VS2022 STL + UCRT
+       FIRST, then our shim dir, then the Dolphin core + Externals, then RXDK
+       headers LAST (its case-insensitive 2003 STL headers must NOT win). -->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <VCInc>$(VCToolsInstallDir)include</VCInc>
+    <UCRTInc>$(UniversalCRT_IncludePath)</UCRTInc>
+    <DolInc>$(ProjectDir);$(ProjectDir)shim;$(DOLSRC)\Common\Src;$(DOLSRC)\Core\Src;$(DOLSRC)\VideoCommon\Src;$(DOLSRC)\AudioCommon\Src;$(DOLSRC)\DiscIO\Src;$(DOLSRC)\InputCommon\Src;$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src;$(ProjectDir)..\..\Externals;$(ProjectDir)..\..\Externals\zlib;$(ProjectDir)..\..\Externals\polarssl\include;$(ProjectDir)..\..\Externals\CLRun\include;$(ProjectDir)..\..\Externals\Bochs_disasm;$(ProjectDir)..\..\Externals\LZO;$(ProjectDir)..\..\Externals\SFML\include;$(ProjectDir)..\..\Externals\libusb\include</DolInc>
+    <IncludePath>$(VCInc);$(UCRTInc);$(DolInc);$(RXDK_LIBS)include</IncludePath>
+    <ExternalIncludePath>$(VCInc);$(UCRTInc);$(RXDK_LIBS)include</ExternalIncludePath>
+    <LibraryPath>$(RXDK_LIBS)lib</LibraryPath>
+    <ReferencePath>$(RXDK_LIBS)lib</ReferencePath>
+    <ExcludePath>$(RXDK_LIBS)lib</ExcludePath>
+    <OutDir>$(ProjectDir)build\</OutDir>
+    <IntDir>$(ProjectDir)build\obj\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <SDLCheck>false</SDLCheck>
+      <!-- _NTOS_ => suppress RXDK winbase Interlocked clash with VS2022
+           intrinsics. _XBOX gates our port shims. SSE1-only (Coppermine) =>
+           our SSE1 JIT fallback layer activates via cpu_info.bSSE2==false. -->
+      <PreprocessorDefinitions>XBOX;_XBOX;NDEBUG;_NTOS_;_WIN32_WINNT=0x0600;NOMINMAX;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_USE_MATH_DEFINES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <AdditionalOptions>/FS /arch:SSE /Zc:sizedDealloc- /Zc:threadSafeInit- /Gy %(AdditionalOptions)</AdditionalOptions>
+      <ControlFlowGuard>false</ControlFlowGuard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions</EnableEnhancedInstructionSet>
+      <TreatWarningAsError>false</TreatWarningAsError>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <!-- RXDK kernel/CRT/D3D8 + VS2022 static C++ runtime last (locale objs only) -->
+      <!-- No SFML_Network.lib: its desktop build wants __imp__ winsock DLL
+           imports the Xbox lacks; the sf:: bits are stubbed in xbox_wii_stubs. -->
+      <AdditionalDependencies>xboxkrnl.lib;libcmt.lib;libcpmt.lib;oldnames.lib;xapilib.lib;d3d8.lib;d3dx8.lib;xgraphics.lib;dsound.lib</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
+      <!-- EH vector ctor/dtor iterator security-variant aliases (Flycast-X lesson);
+           /FORCE:MULTIPLE lets our Xbox overrides win over core wildcard symbols. -->
+      <AdditionalOptions>"/ALTERNATENAME:??_L@YGXPAXIIP6EX0@Z1@Z=??_L@YGXPAXIHP6EX0@Z1@Z" "/ALTERNATENAME:??_M@YGXPAXIIP6EX0@Z@Z=??_M@YGXPAXIHP6EX0@Z@Z" /ignore:4254 /FORCE:MULTIPLE %(AdditionalOptions)</AdditionalOptions>
+      <GenerateMapFile>true</GenerateMapFile>
+      <FixedBaseAddress>false</FixedBaseAddress>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+    </Link>
+    <PostBuildEvent>
+      <Message>Packaging Dolphin-Xbox XBE + XISO...</Message>
+      <Command>"$(RXDK_LIBS)bin\patchSubsystem.exe" -i="$(OutDir)$(TargetFileName)" -s=0x000E
+"$(RXDK_LIBS)bin\imagebld.exe" /in:"$(OutDir)$(TargetFileName)" /out:"$(OutDir)$(TargetName).xbe" /nologo /stack:4194304 /debug /nolibwarn /testid:"0x474D4443" /testname:"Dolphin"
+if not exist "$(OutDir)Build\$(ProjectName)" mkdir "$(OutDir)Build\$(ProjectName)"
+copy /Y "$(OutDir)$(TargetName).xbe" "$(OutDir)Build\$(ProjectName)\default.xbe"
+if not exist "$(OutDir)XISO" mkdir "$(OutDir)XISO"
+"$(RXDK_LIBS)bin\xdvdfs.exe" pack "$(OutDir)Build\$(ProjectName)" "$(OutDir)XISO\$(ProjectName).iso"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <!-- Bring-up batch 1: Common foundation. x86 + generic files only;
+         ARM sources excluded (wrong arch). Surfaces the dominant RXDK error
+         categories (windows.h, CRT, STL, threads) to fix once. -->
+    <ClCompile Include="$(DOLSRC)\Common\Src\*.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Common\Src\ArmCPUDetect.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Common\Src\ArmEmitter.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Common\Src\stdafx.cpp" />
+    <!-- x86 uses x64FPURoundMode.cpp (SSE path); generic is the fallback -->
+    <ClCompile Remove="$(DOLSRC)\Common\Src\GenericFPURoundMode.cpp" />
+    <!-- Crypto subdir (non-recursive wildcard misses it): ec.cpp = Wii EC crypto -->
+    <ClCompile Include="$(DOLSRC)\Common\Src\Crypto\ec.cpp">
+      <ObjectFileName>$(IntDir)crypto\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(DOLSRC)\Common\Src\Crypto\bn.cpp">
+      <ObjectFileName>$(IntDir)crypto\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(DOLSRC)\Common\Src\Crypto\aes_core.cpp">
+      <ObjectFileName>$(IntDir)crypto\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(DOLSRC)\Common\Src\Crypto\aes_cbc.cpp">
+      <ObjectFileName>$(IntDir)crypto\</ObjectFileName></ClCompile>
+    <!-- re-added below with the x87-only (/arch:IA32) override -->
+    <ClCompile Remove="$(DOLSRC)\Common\Src\x64SSE1Thunks.cpp" />
+    <!-- Console is desktop-only; xbox_console_listener.cpp replaces it -->
+    <ClCompile Remove="$(DOLSRC)\Common\Src\ConsoleListener.cpp" />
+    <ClCompile Include="$(ProjectDir)xbox_console_listener.cpp" />
+    <!-- x87-only thunk (matches PC build) -->
+    <ClCompile Include="$(DOLSRC)\Common\Src\x64SSE1Thunks.cpp">
+      <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <!-- Xbox port shims -->
+    <ClCompile Include="$(ProjectDir)xbox_win32_shim.cpp" />
+    <!-- Raw-Win32 CRT fd layer (fopen/ifstream/IOFile all route through it);
+         replaces RXDK's broken 20-handle _pioinfo layer. -->
+    <ClCompile Include="$(ProjectDir)xbox_crt_file_shim.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Bring-up batch 2: DiscIO (disc image parsing). Needs zlib/polarssl
+         headers (Externals, on the include path). -->
+    <ClCompile Include="$(DOLSRC)\DiscIO\Src\*.cpp" />
+    <ClCompile Remove="$(DOLSRC)\DiscIO\Src\stdafx.cpp" />
+    <!-- Raw physical-drive reader (winioctl); Xbox reads disc images as files -->
+    <ClCompile Remove="$(DOLSRC)\DiscIO\Src\DriveBlob.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- InputCommon: core config + null ControllerInterface (no desktop
+         input backends; CIFACE_USE_* disabled on Xbox). -->
+    <ClCompile Include="$(DOLSRC)\InputCommon\Src\ControllerEmu.cpp" />
+    <ClCompile Include="$(DOLSRC)\InputCommon\Src\InputConfig.cpp" />
+    <ClCompile Include="$(DOLSRC)\InputCommon\Src\ControllerInterface\ControllerInterface.cpp" />
+    <ClCompile Include="$(DOLSRC)\InputCommon\Src\ControllerInterface\Device.cpp" />
+    <ClCompile Include="$(DOLSRC)\InputCommon\Src\ControllerInterface\ExpressionParser.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Link supplements + excluded-feature stubs -->
+    <ClCompile Include="$(ProjectDir)xbox_link_supplement.cpp" />
+    <ClCompile Include="$(ProjectDir)xbox_stl_supplement.cpp" />
+    <ClCompile Include="$(ProjectDir)xbox_stubs.cpp" />
+    <ClCompile Include="$(ProjectDir)xbox_wii_stubs.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- AudioCommon: dispatcher + mixer + null + DSound (RXDK has dsound.h);
+         desktop/other-OS backends compile to stubs via HAVE_*/platform ifdefs,
+         but XAudio2 + OpenAL headers are absent on RXDK so those are excluded. -->
+    <ClCompile Include="$(DOLSRC)\AudioCommon\Src\AudioCommon.cpp" />
+    <ClCompile Include="$(DOLSRC)\AudioCommon\Src\Mixer.cpp" />
+    <ClCompile Include="$(DOLSRC)\AudioCommon\Src\NullSoundStream.cpp" />
+    <ClCompile Include="$(DOLSRC)\AudioCommon\Src\WaveFile.cpp" />
+    <ClCompile Include="$(DOLSRC)\AudioCommon\Src\DPL2Decoder.cpp" />
+    <!-- Desktop DSoundStream uses the PC DirectSound8 API (DirectSoundCreate8,
+         PCMWAVEFORMAT, guid3DAlgorithm, DSBCAPS_GLOBALFOCUS…) absent from the
+         Xbox's own DirectSound. A native Xbox DSound backend is a Phase-2 item
+         (cf. PS1 xbox_sound.c); Null audio suffices for bring-up + first boot. -->
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Bring-up batch 3: VideoCommon (renderer-agnostic GPU emulation). The
+         desktop-window / capture / backend-registration files are excluded;
+         the Xbox gets its own NV2A(DX8) backend + window in Phase 2. -->
+    <ClCompile Include="$(DOLSRC)\VideoCommon\Src\*.cpp" />
+    <ClCompile Remove="$(DOLSRC)\VideoCommon\Src\AVIDump.cpp" />         <!-- VFW video capture -->
+    <ClCompile Remove="$(DOLSRC)\VideoCommon\Src\EmuWindow.cpp" />      <!-- Win32 window -->
+    <ClCompile Remove="$(DOLSRC)\VideoCommon\Src\VideoBackendBase.cpp" /><!-- refs D3D9 plugin -->
+    <ClCompile Remove="$(DOLSRC)\VideoCommon\Src\OpenCL.cpp" />         <!-- OpenCL -->
+    <!-- x64TextureDecoder uses 343 compile-time SSE2 intrinsics (__m128i,
+         _mm_*_epi*) that MSVC emits as real SSE2 regardless of /arch:SSE =>
+         crash on the SSE1 Coppermine. Use the pure-C GenericTextureDecoder.
+         (See the compile-time-SSE2-intrinsic audit — distinct from JIT SSE2.) -->
+    <ClCompile Remove="$(DOLSRC)\VideoCommon\Src\x64TextureDecoder.cpp" />
+    <ClCompile Remove="$(DOLSRC)\VideoCommon\Src\x64DLCache.cpp" /><!-- use GenericDLCache -->
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Bring-up batch 4: Core — interpreter, x86 JIT (with our SSE1 layer),
+         DSP, and all HW emulation. Wrong-arch ARM JIT + desktop networking
+         (BBA TAP) excluded; the rest harvested reactively. -->
+    <ClCompile Include="$(DOLSRC)\Core\Src\**\*.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Core\Src\**\stdafx.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Core\Src\PowerPC\JitArm32\**\*.cpp" /><!-- ARM JIT -->
+    <ClCompile Remove="$(DOLSRC)\Core\Src\PowerPC\Jit64IL\**\*.cpp" /><!-- IL JIT (auto_ptr/C++17); we use Jit64 -->
+    <ClCompile Remove="$(DOLSRC)\Core\Src\ArmMemTools.cpp" /><!-- ARM -->
+    <ClCompile Remove="$(DOLSRC)\Core\Src\HW\BBA-TAP\**\*.cpp" /><!-- broadband adapter TAP -->
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Software renderer (CPU rasterization -> XFB). GL present + wx config
+         excluded; SWRenderer_Xbox.cpp / HwRasterizer_Xbox.cpp replace them. -->
+    <ClCompile Include="$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src\*.cpp" />
+    <ClCompile Remove="$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src\stdafx.cpp" />
+    <ClCompile Remove="$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src\SWRenderer.cpp" /><!-- GL -> SWRenderer_Xbox -->
+    <ClCompile Remove="$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src\HwRasterizer.cpp" /><!-- GL -> HwRasterizer_Xbox -->
+    <ClCompile Remove="$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src\RasterFont.cpp" /><!-- GL font -->
+    <ClCompile Remove="$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src\VideoConfigDialog.cpp" /><!-- wx -->
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Xbox shell: XDK entry, D3D8 present backend, backend registration,
+         renderer/rasterizer present swaps. -->
+    <ClCompile Include="$(ProjectDir)main_xbox.cpp" />
+    <ClCompile Include="$(ProjectDir)xbox_d3d8.cpp" />
+    <ClCompile Include="$(ProjectDir)xbox_video_backend.cpp" />
+    <ClCompile Include="$(ProjectDir)SWRenderer_Xbox.cpp" />
+    <ClCompile Include="$(ProjectDir)HwRasterizer_Xbox.cpp" />
+    <!-- C++ runtime marriage (ported from Flycast-X): provides the modern
+         VS2022 CRT/STL/EH/threading/locale symbols RXDK's 2003 CRT lacks
+         (__CxxFrameHandler3, __stdio_common_*, __Mtx_*/__Cnd_*/__Thrd_*,
+         __std_exception_*, locale facets). -->
+    <ClCompile Include="$(ProjectDir)xbox_eh_shim.cpp" />
+    <ClCompile Include="$(ProjectDir)xbox_cpprt.cpp" />
+    <ClCompile Include="$(ProjectDir)xbox_stl_shim.cpp" />
+    <ClCompile Include="$(ProjectDir)xbox_locale.cpp" />
+    <ClCompile Include="$(ProjectDir)xbox_crt_shim.cpp">
+      <!-- /Oi- : don't expand CRT intrinsics inside their own shim (recursion) -->
+      <AdditionalOptions>/arch:SSE /Zc:sizedDealloc- /Zc:threadSafeInit- /Gy /Oi- %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Externals C libs (compiled into the XBE like the PS1 tree does its
+         deps). Only the pieces the core actually references. -->
+    <ClCompile Include="$(ProjectDir)..\..\Externals\polarssl\library\aes.c">
+      <ObjectFileName>$(IntDir)polarssl\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(ProjectDir)..\..\Externals\polarssl\library\sha1.c">
+      <ObjectFileName>$(IntDir)polarssl\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(ProjectDir)..\..\Externals\polarssl\library\md5.c">
+      <ObjectFileName>$(IntDir)polarssl\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(ProjectDir)..\..\Externals\polarssl\library\padlock.c">
+      <ObjectFileName>$(IntDir)polarssl\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(ProjectDir)..\..\Externals\LZO\minilzo.c">
+      <ObjectFileName>$(IntDir)lzo\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(ProjectDir)..\..\Externals\SOIL\*.c">
+      <ObjectFileName>$(IntDir)soil\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(ProjectDir)..\..\Externals\Bochs_disasm\PowerPCDisasm.cpp">
+      <ObjectFileName>$(IntDir)bochs\</ObjectFileName></ClCompile>
+    <!-- x86 disassembler engine (JitBase LogGeneratedX86 debug) -->
+    <ClCompile Include="$(ProjectDir)..\..\Externals\Bochs_disasm\dis_decode.cpp">
+      <ObjectFileName>$(IntDir)bochs\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(ProjectDir)..\..\Externals\Bochs_disasm\dis_groups.cpp">
+      <ObjectFileName>$(IntDir)bochs\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(ProjectDir)..\..\Externals\Bochs_disasm\syntax.cpp">
+      <ObjectFileName>$(IntDir)bochs\</ObjectFileName></ClCompile>
+    <ClCompile Include="$(ProjectDir)..\..\Externals\Bochs_disasm\resolve.cpp">
+      <ObjectFileName>$(IntDir)bochs\</ObjectFileName></ClCompile>
+    <ClCompile Remove="$(DOLSRC)\Core\Src\HW\WiimoteReal\**\*.cpp" /><!-- real wiimote (bluetooth/hotplug) -->
+    <!-- Networking / netplay: not needed for a GameCube POC -->
+    <ClCompile Remove="$(DOLSRC)\Core\Src\NetPlayClient.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Core\Src\NetPlayServer.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Core\Src\HW\SI_DeviceGBA.cpp" /><!-- SFML socket GBA link -->
+    <ClCompile Remove="$(DOLSRC)\Core\Src\HW\EXI_DeviceGecko.cpp" /><!-- socket Gecko -->
+    <!-- Wii IPC devices: the NON-socket ones (es, ec_wii, ncd/kd/wd via other
+         files) RE-INCLUDED — the polarssl/bignum/libusb-header shims let them
+         compile. The socket-heavy ones need a full BSD socket API (sa_len,
+         SOCK_RAW, socklen_t, poll) the Xbox winsockx lacks; they're dead weight
+         on GC, so stay excluded and are stubbed in xbox_wii_stubs.cpp. -->
+    <ClCompile Remove="$(DOLSRC)\Core\Src\IPC_HLE\ICMPLin.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Core\Src\IPC_HLE\ICMPWin.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Core\Src\IPC_HLE\ICMP.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Core\Src\IPC_HLE\WII_Socket.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Core\Src\IPC_HLE\WII_IPC_HLE_Device_net.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Core\Src\IPC_HLE\WII_IPC_HLE_Device_net_ssl.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Core\Src\IPC_HLE\WII_IPC_HLE_Device_hid.cpp" />
+    <ClCompile Remove="$(DOLSRC)\Core\Src\PowerPC\GDBStub.cpp" /><!-- POSIX debug stub (unistd) -->
+    <!-- Wii crypto (polarssl bignum/EC): not needed for a GameCube POC -->
+  </ItemGroup>
+  <!-- /Od-on-recompiler test DISPROVED the optimizer (JIT at /Od still hung at
+       0x8023346C), so the JIT is back at /O2. xbox_stubs.cpp stays /Od so its
+       _dtest/_ldtest/byteswap definitions (kept for reuse) compile without the
+       intrinsic-redefinition error. -->
+  <ItemGroup>
+    <ClCompile Update="$(ProjectDir)xbox_stubs.cpp">
+      <Optimization>Disabled</Optimization>
+    </ClCompile>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

@@ -113,16 +113,28 @@ void Init()
 	}
 
 	g_DeviceMap[i] = new CWII_IPC_HLE_Device_di(i, std::string("/dev/di")); i++;
+	// OG Xbox port: the socket-backed Wii network devices don't build on the
+	// Xbox winsock (BSD socket API gaps) and are unused for GameCube — map them
+	// to the generic stub device.
+#ifndef _XBOX
 	g_DeviceMap[i] = new CWII_IPC_HLE_Device_net_kd_request(i, std::string("/dev/net/kd/request")); i++;
 	g_DeviceMap[i] = new CWII_IPC_HLE_Device_net_kd_time(i, std::string("/dev/net/kd/time")); i++;
 	g_DeviceMap[i] = new CWII_IPC_HLE_Device_net_ncd_manage(i, std::string("/dev/net/ncd/manage")); i++;
 	g_DeviceMap[i] = new CWII_IPC_HLE_Device_net_wd_command(i, std::string("/dev/net/wd/command")); i++;
 	g_DeviceMap[i] = new CWII_IPC_HLE_Device_net_ip_top(i, std::string("/dev/net/ip/top")); i++;
 	g_DeviceMap[i] = new CWII_IPC_HLE_Device_net_ssl(i, std::string("/dev/net/ssl")); i++;
+#else
+	g_DeviceMap[i] = new CWII_IPC_HLE_Device_stub(i, std::string("/dev/net/kd/request")); i++;
+	g_DeviceMap[i] = new CWII_IPC_HLE_Device_stub(i, std::string("/dev/net/kd/time")); i++;
+	g_DeviceMap[i] = new CWII_IPC_HLE_Device_stub(i, std::string("/dev/net/ncd/manage")); i++;
+	g_DeviceMap[i] = new CWII_IPC_HLE_Device_stub(i, std::string("/dev/net/wd/command")); i++;
+	g_DeviceMap[i] = new CWII_IPC_HLE_Device_stub(i, std::string("/dev/net/ip/top")); i++;
+	g_DeviceMap[i] = new CWII_IPC_HLE_Device_stub(i, std::string("/dev/net/ssl")); i++;
+#endif
 	g_DeviceMap[i] = new CWII_IPC_HLE_Device_usb_kbd(i, std::string("/dev/usb/kbd")); i++;
 	g_DeviceMap[i] = new CWII_IPC_HLE_Device_sdio_slot0(i, std::string("/dev/sdio/slot0")); i++;
 	g_DeviceMap[i] = new CWII_IPC_HLE_Device_stub(i, std::string("/dev/sdio/slot1")); i++;
-	#if  defined(__LIBUSB__) || defined(_WIN32)
+	#if  (defined(__LIBUSB__) || defined(_WIN32)) && !defined(_XBOX)
 		g_DeviceMap[i] = new CWII_IPC_HLE_Device_hid(i, std::string("/dev/usb/hid")); i++;
 	#else
         g_DeviceMap[i] = new CWII_IPC_HLE_Device_stub(i, std::string("/dev/usb/hid")); i++;

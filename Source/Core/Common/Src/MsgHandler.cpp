@@ -87,7 +87,9 @@ bool MsgAlert(bool yes_no, int Style, const char* format, ...)
 // Default non library dependent panic alert
 bool DefaultMsgHandler(const char* caption, const char* text, bool yes_no, int Style)
 {
-#ifdef _WIN32
+	// OG Xbox port: no GUI MessageBox on the Xbox — fall through to the
+	// portable printf/log path below.
+#if defined(_WIN32) && !defined(_XBOX)
 	int STYLE = MB_ICONINFORMATION;
 	if (Style == QUESTION) STYLE = MB_ICONQUESTION;
 	if (Style == WARNING) STYLE = MB_ICONWARNING;

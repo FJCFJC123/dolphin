@@ -61,13 +61,15 @@ void VideoSoftware::ShowConfig(void *_hParent)
 bool VideoSoftware::Initialize(void *&window_handle)
 {
 	g_SWVideoConfig.Load((File::GetUserPath(D_CONFIG_IDX) + "gfx_software.ini").c_str());
-	InitInterface();	
-	
+#ifndef _XBOX
+	InitInterface();
+
 	if (!GLInterface->Create(window_handle))
 	{
 		INFO_LOG(VIDEO, "%s", "SWRenderer::Create failed\n");
 		return false;
 	}
+#endif
 
 	InitBPMemory();
 	InitXFMemory();
@@ -76,7 +78,9 @@ bool VideoSoftware::Initialize(void *&window_handle)
 	OpcodeDecoder::Init();
 	Clipper::Init();
 	Rasterizer::Init();
+#ifndef _XBOX
 	HwRasterizer::Init();
+#endif
 	SWRenderer::Init();
 	DebugUtil::Init();
 
@@ -147,13 +151,17 @@ void VideoSoftware::EmuStateChange(EMUSTATE_CHANGE newState)
 void VideoSoftware::Shutdown()
 {
 	// TODO: should be in Video_Cleanup
+#ifndef _XBOX
 	HwRasterizer::Shutdown();
+#endif
 	SWRenderer::Shutdown();
 
-	// Do our OSD callbacks	
+	// Do our OSD callbacks
 	OSD::DoCallbacks(OSD::OSD_SHUTDOWN);
 
+#ifndef _XBOX
 	GLInterface->Shutdown();
+#endif
 }
 
 void VideoSoftware::Video_Cleanup()
@@ -163,6 +171,7 @@ void VideoSoftware::Video_Cleanup()
 // This is called after Video_Initialize() from the Core
 void VideoSoftware::Video_Prepare()
 {
+#ifndef _XBOX
 	GLInterface->MakeCurrent();
 	// Init extension support.
 #ifndef USE_GLES
@@ -176,11 +185,14 @@ void VideoSoftware::Video_Prepare()
 #endif
 	// Handle VSync on/off
 	GLInterface->SwapInterval(VSYNC_ENABLED);
+#endif // !_XBOX
 
-	// Do our OSD callbacks	
+	// Do our OSD callbacks
 	OSD::DoCallbacks(OSD::OSD_INIT);
 
+#ifndef _XBOX
 	HwRasterizer::Prepare();
+#endif
 	SWRenderer::Prepare();
 
 	INFO_LOG(VIDEO, "Video backend initialized.");
@@ -331,15 +343,21 @@ writeFn32 VideoSoftware::Video_PEWrite32()
 // Draw messages on top of the screen
 unsigned int VideoSoftware::PeekMessages()
 {
+#ifndef _XBOX
 	return GLInterface->PeekMessages();
+#else
+	return 0;
+#endif
 }
 
 // Show the current FPS
 void VideoSoftware::UpdateFPSDisplay(const char *text)
 {
+#ifndef _XBOX
 	char temp[100];
 	snprintf(temp, sizeof temp, "%s | Software | %s", scm_rev_str, text);
 	GLInterface->UpdateFPSDisplay(temp);
+#endif
 }
 
 }

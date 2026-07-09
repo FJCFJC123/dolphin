@@ -4,15 +4,13 @@
 
 #include "VideoBackendBase.h"
 
-// TODO: ugly
+// OG Xbox port: DX9 (NV2A-scaffold twin) is the only backend on the PC
+// harness. DX11/OGL removed outright; the Software backend is out too for
+// now because its presenter is GLInterface/GLew (which live in DolphinWX) —
+// the Xbox build will get its own presenter if/when SW is revived.
 #ifdef _WIN32
 #include "../../../Plugins/Plugin_VideoDX9/Src/VideoBackend.h"
-#include "../../../Plugins/Plugin_VideoDX11/Src/VideoBackend.h"
 #endif
-#if !defined(USE_GLES) || USE_GLES3
-#include "../../../Plugins/Plugin_VideoOGL/Src/VideoBackend.h"
-#endif
-#include "../../../Plugins/Plugin_VideoSoftware/Src/VideoBackend.h"
 
 std::vector<VideoBackend*> g_available_video_backends;
 VideoBackend* g_video_backend = NULL;
@@ -41,16 +39,10 @@ void VideoBackend::PopulateList()
 {
 	VideoBackend* backends[4] = { NULL };
 
-	// D3D11 > OGL > D3D9 > SW
+	// OG Xbox port: D3D9 only
 #ifdef _WIN32
-	g_available_video_backends.push_back(backends[2] = new DX9::VideoBackend);
-	if (IsGteVista())
-		g_available_video_backends.push_back(backends[0] = new DX11::VideoBackend);
+	g_available_video_backends.push_back(backends[0] = new DX9::VideoBackend);
 #endif
-#if !defined(USE_GLES) || USE_GLES3
-	g_available_video_backends.push_back(backends[1] = new OGL::VideoBackend);
-#endif
-	g_available_video_backends.push_back(backends[3] = new SW::VideoSoftware);
 
 	for (int i = 0; i < 4; ++i)
 	{

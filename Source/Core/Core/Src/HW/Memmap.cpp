@@ -316,11 +316,22 @@ bool IsInitialized()
 
 
 // We don't declare the IO region in here since its handled by other means.
+#ifdef _XBOX
+// OG Xbox 128MB budget: commit only the 24MB the GC actually uses (REALRAM),
+// not the 32MB pow2-rounded RAM_SIZE. The 8MB tail is never accessed (every
+// m_pRAM read/write is gated by (addr & 0xfffffff) < REALRAM_SIZE), and RAM_MASK
+// stays 32MB so address masking/mirrors are unchanged. Frees 8MB for the JIT.
+// 32MB RAM wasn't the 0x8023346C fix, so back to 24MB REALRAM for headroom (the
+// JIT fastmem RAM path has no bound check but the game stays within REALRAM).
+#define XBOX_RAM_ALLOC REALRAM_SIZE
+#else
+#define XBOX_RAM_ALLOC RAM_SIZE
+#endif
 static const MemoryView views[] =
 {
-	{&m_pRAM,      &m_pPhysicalRAM,          0x00000000, RAM_SIZE, 0},
-	{NULL,         &m_pVirtualCachedRAM,     0x80000000, RAM_SIZE, MV_MIRROR_PREVIOUS},
-	{NULL,         &m_pVirtualUncachedRAM,   0xC0000000, RAM_SIZE, MV_MIRROR_PREVIOUS},
+	{&m_pRAM,      &m_pPhysicalRAM,          0x00000000, XBOX_RAM_ALLOC, 0},
+	{NULL,         &m_pVirtualCachedRAM,     0x80000000, XBOX_RAM_ALLOC, MV_MIRROR_PREVIOUS},
+	{NULL,         &m_pVirtualUncachedRAM,   0xC0000000, XBOX_RAM_ALLOC, MV_MIRROR_PREVIOUS},
 
 //  Don't map any memory for the EFB. We want all access to this area to go
 //  through the hardware access handlers.
@@ -340,13 +351,31 @@ static const int num_views = sizeof(views) / sizeof(MemoryView);
 void Init()
 {
 	bool wii = SConfig::GetInstance().m_LocalCoreStartupParameter.bWii;
+#ifdef _XBOX
+	// OG Xbox port: never allocate the 32MB fake-VMEM region — GC titles don't
+	// use it and on Xbox that 32MB (committed physical, no pagefile) is what
+	// starves the JIT iCache. TLB hack off.
+	bFakeVMEM = false;
+#else
 	bFakeVMEM = SConfig::GetInstance().m_LocalCoreStartupParameter.bTLBHack == true;
+#endif
 	bMMU = SConfig::GetInstance().m_LocalCoreStartupParameter.bMMU;
 
 	u32 flags = 0;
 	if (wii) flags |= MV_WII_ONLY;
 	if (bFakeVMEM) flags |= MV_FAKE_VMEM;
 	base = MemoryMap_Setup(views, num_views, flags, &g_arena);
+
+#ifdef _XBOX
+	// OG Xbox port: the x86 fast path reads/writes *(base + (addr & MEMVIEW32_MASK)).
+	// On PC the RAM views are MapViewOfFileEx'd at base+virtual_address, but our
+	// MemArena::CreateView returns a single contiguous backing block and IGNORES
+	// the base hint (see MemArena.cpp), so MemoryMap_Setup's returned base (a
+	// bogus ~0x40000 that was never reserved) points at REAL Xbox memory. Point
+	// base at the backing block (RAM at offset 0) so base+addr hits emulated RAM
+	// instead of corrupting the Xbox. All RAM mirrors mask to the physical offset.
+	base = m_pRAM;
+#endif
 
 	if (wii)
 		InitHWMemFuncsWii();
@@ -388,7 +417,7 @@ void Shutdown()
 void Clear()
 {
 	if (m_pRAM)
-		memset(m_pRAM, 0, RAM_SIZE);
+		memset(m_pRAM, 0, XBOX_RAM_ALLOC); // 24MB on Xbox (matches the reduced alloc)
 	if (m_pL1Cache)
 		memset(m_pL1Cache, 0, L1_CACHE_SIZE);
 	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bWii && m_pEXRAM)
@@ -479,7 +508,11 @@ void GetString(std::string& _string, const u32 em_address)
 	char *string = stringBuffer;
 	char c;
 	u32 addr = em_address;
-	while ((c = Read_U8(addr)))
+	// OG Xbox port: BOUND the copy. A garbage/non-terminated GC address would
+	// otherwise overflow this fixed stack buffer, smashing the return address
+	// with GC data (jumping to a low GC-address value) — the CCPU::Run crash.
+	char *limit = stringBuffer + sizeof(stringBuffer) - 1;
+	while (string < limit && (c = Read_U8(addr)))
 	{
 		*string++ = c;
 		addr++;

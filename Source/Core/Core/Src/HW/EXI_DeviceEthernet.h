@@ -5,6 +5,9 @@
 #ifndef _EXIDEVICE_ETHERNET_H
 #define _EXIDEVICE_ETHERNET_H
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include "Thread.h"
 
 // Network Control Register A

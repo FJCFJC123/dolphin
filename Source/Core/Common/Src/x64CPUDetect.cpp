@@ -104,13 +104,14 @@ void CPUInfo::Detect()
 #endif
 	num_cores = 1;
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 #ifdef _M_IX86
 	BOOL f64 = false;
 	IsWow64Process(GetCurrentProcess(), &f64);
 	OS64bit = (f64 == TRUE) ? true : false;
 #endif
 #endif
+	// OG Xbox port: always a 32-bit native OS, never WOW64 (OS64bit stays false)
 	
 	// Set obvious defaults, for extra safety
 	if (Mode64bit) {

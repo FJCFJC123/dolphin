@@ -7,7 +7,8 @@
 
 #include "SoundStream.h"
 
-#ifdef _WIN32
+// OG Xbox port: no XAudio2 SDK on RXDK — Xbox uses the DSound backend.
+#if defined(_WIN32) && !defined(_XBOX)
 #include "Thread.h"
 #include <xaudio2.h>
 #include <memory>
@@ -44,7 +45,7 @@ public:
 
 class XAudio2 : public SoundStream
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 
 	class Releaser
 	{
@@ -97,6 +98,8 @@ public:
 	XAudio2(CMixer *mixer, void *hWnd = NULL)
 		: SoundStream(mixer)
 	{}
+
+	static bool isValid() { return false; }
 #endif
 };
 

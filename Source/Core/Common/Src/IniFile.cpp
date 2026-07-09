@@ -330,26 +330,55 @@ bool IniFile::Load(const char* filename, bool keep_current_data)
 		sections.clear();
 	// first section consists of the comments before the first real section
 
-	// Open file
+	// Read all lines. OG Xbox port: raw Win32 (IOFile) — the RXDK CRT stdio /
+	// C++ filebuf layer is unusable (crashes in fread/xsgetn).
+	std::vector<std::string> lines;
+#ifdef _XBOX
+	{
+		File::IOFile f(filename, "rb");
+		if (!f.IsOpen()) return false;
+		u64 sz = f.GetSize();
+		std::string buf;
+		if (sz)
+		{
+			buf.resize((size_t)sz);
+			if (!f.ReadBytes(&buf[0], (size_t)sz)) return false;
+		}
+		size_t pos = 0;
+		for (;;)
+		{
+			size_t nl = buf.find('\n', pos);
+			size_t end = (nl == std::string::npos) ? buf.size() : nl;
+			std::string line = buf.substr(pos, end - pos);
+			if (!line.empty() && line[line.size()-1] == '\r')
+				line.erase(line.size()-1);
+			lines.push_back(line);
+			if (nl == std::string::npos) break;
+			pos = nl + 1;
+		}
+	}
+#else
 	std::ifstream in;
 	OpenFStream(in, filename, std::ios::in);
-
 	if (in.fail()) return false;
-
-	Section* current_section = NULL;
 	while (!in.eof())
 	{
 		char templine[MAX_BYTES];
 		in.getline(templine, MAX_BYTES);
 		std::string line = templine;
-
 #ifndef _WIN32
-		// Check for CRLF eol and convert it to LF
 		if (!line.empty() && line.at(line.size()-1) == '\r')
-		{
 			line.erase(line.size()-1);
-		}
 #endif
+		lines.push_back(line);
+	}
+	in.close();
+#endif
+
+	Section* current_section = NULL;
+	for (size_t _li = 0; _li < lines.size(); ++_li)
+	{
+		const std::string& line = lines[_li];
 
 		if (line.size() > 0)
 		{
@@ -384,10 +413,44 @@ bool IniFile::Load(const char* filename, bool keep_current_data)
 		}
 	}
 
-	in.close();
 	return true;
 }
 
+#ifdef _XBOX
+// OG Xbox port: build the whole INI text, then write it with raw Win32 (IOFile).
+bool IniFile::Save(const char* filename)
+{
+	std::string outbuf;
+	for (auto iter = sections.begin(); iter != sections.end(); ++iter)
+	{
+		const Section& section = *iter;
+		if (section.keys_order.size() != 0 || section.lines.size() != 0)
+			outbuf += "[" + section.name + "]\n";
+
+		if (section.keys_order.size() == 0)
+		{
+			for (auto liter = section.lines.begin(); liter != section.lines.end(); ++liter)
+				outbuf += *liter + "\n";
+		}
+		else
+		{
+			for (auto kiter = section.keys_order.begin(); kiter != section.keys_order.end(); ++kiter)
+			{
+				auto vit = section.values.find(*kiter);
+				if (vit != section.values.end())
+					outbuf += *kiter + " = " + vit->second + "\n";
+			}
+		}
+	}
+
+	File::CreateFullPath(filename);
+	File::IOFile f(filename, "wb");
+	if (!f.IsOpen()) return false;
+	if (!outbuf.empty())
+		f.WriteBytes(outbuf.data(), outbuf.size());
+	return true;
+}
+#else
 bool IniFile::Save(const char* filename)
 {
 	std::ofstream out;
@@ -427,6 +490,7 @@ bool IniFile::Save(const char* filename)
 
 	return true;
 }
+#endif // !_XBOX
 
 
 bool IniFile::Get(const char* sectionName, const char* key, std::string* value, const char* defaultValue)
