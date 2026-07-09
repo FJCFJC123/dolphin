@@ -56,7 +56,15 @@ bool CBoot::EmulatedBS2_GC()
 	Memory::Write_U32(0x0D15EA5E, 0x80000020);	// booted from bootrom. 0xE5207C22 = booted from jtag
 	Memory::Write_U32(Memory::REALRAM_SIZE, 0x80000028);	// Physical Memory Size (24MB on retail)
 	// TODO determine why some games fail when using a retail id. (Seem to take different EXI paths, see ikaruga for example)
+#ifdef _XBOX
+	// RETAIL console (bit 28 clear). The DevKit value (0x10000006) makes the GC OS
+	// detect a development/debug console, enable debug logging, and spin forever
+	// polling a non-existent EXI debug device — the Gladius AND SSBM boot hang
+	// (both interp + JIT). Retail skips that path entirely. yagcd 4.2.1.1.2.
+	Memory::Write_U32(0x00000003, 0x8000002C);	// Console type - Retail
+#else
 	Memory::Write_U32(0x10000006, 0x8000002C);	// Console type - DevKit  (retail ID == 0x00000003) see yagcd 4.2.1.1.2
+#endif
 
 	Memory::Write_U32(SConfig::GetInstance().m_LocalCoreStartupParameter.bNTSC
 						 ? 0 : 1, 0x800000CC);	// fake the VI Init of the IPL (yagcd 4.2.1.4)

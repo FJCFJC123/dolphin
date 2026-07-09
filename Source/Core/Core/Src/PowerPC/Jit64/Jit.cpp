@@ -158,6 +158,7 @@ static int CODE_SIZE = 1024*1024*4;  // pools weren't the bug; back to 4MB to fr
 #else
 static int CODE_SIZE = 1024*1024*32;
 #endif
+extern bool g_jit_tiny_cache;  // avenue-1 cache-pressure test (see JitCache.cpp)
 
 namespace CPUCompare
 {
@@ -204,7 +205,7 @@ void Jit64::Init()
 	fpr.SetEmitter(this);
 
 	JSTAGE("JIT:trampolines"); trampolines.Init();
-	JSTAGE("JIT:AllocCode");   AllocCodeSpace(CODE_SIZE);
+	JSTAGE("JIT:AllocCode");   AllocCodeSpace(g_jit_tiny_cache ? 1024*1024*4 : 1024*1024*32);
 
 	JSTAGE("JIT:blocks");      blocks.Init();
 	JSTAGE("JIT:asm");         asm_routines.Init();
@@ -652,6 +653,19 @@ const u8* Jit64::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBloc
 				WriteExit(ops[i].address, 0);
 				SetJumpTarget(noBreakpoint);
 			}
+
+#ifndef _XBOX
+			// DISPATCH DIVERGENCE LOG (2026-07-09): flush regs so ppcState is
+			// current, then log the interrupt-dispatch state to compare against
+			// the interpreter. Same three addresses as the interpreter hook.
+			// Xbox: guarded OFF — this injects a flush+printf on every interrupt
+			// dispatch = the intermittent "storm" lockup.
+			if (js.compilerPC == 0x80233128 || js.compilerPC == 0x80233434 || js.compilerPC == 0x80232018)
+			{
+				gpr.Flush(FLUSH_ALL);
+				ABI_CallFunctionC((void*)&PowerPC::LogHandlerDispatch, js.compilerPC);
+			}
+#endif
 
 			Jit64Tables::CompileInstruction(ops[i]);
 

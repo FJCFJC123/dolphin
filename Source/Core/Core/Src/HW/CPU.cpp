@@ -58,6 +58,7 @@ extern "C" unsigned xbox_live_sprg(unsigned n) { return PowerPC::ppcState.spr[27
 extern "C" unsigned xbox_live_intcause()   { return ProcessorInterface::GetCause(); }
 extern "C" unsigned xbox_live_intmask()    { return ProcessorInterface::GetMask(); }
 extern "C" unsigned xbox_live_exceptions() { return PowerPC::ppcState.Exceptions; }
+extern "C" unsigned xbox_live_extsrc()     { return ProcessorInterface::g_last_ext_source; }
 // Big-endian opcode at a guest address (for disassembling the stuck wait loop).
 extern "C" unsigned xbox_guest_op(unsigned addr)
 {

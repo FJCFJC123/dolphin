@@ -374,18 +374,21 @@ void __cdecl main()
 	SConfig::Init();
 
 	SCoreStartupParameter& sp = SConfig::GetInstance().m_LocalCoreStartupParameter;
-	sp.iCPUCore    = 1;      // SSE1 JIT (cpu_info.bSSE2=false below). Now fits: RAM view
-	                         // trimmed 32->24MB (REALRAM) frees 8MB for the iCache.
+	sp.iCPUCore    = 1;      // JIT (interpreter+DX8 confirmed alive: DEC/EXT/DSI progressing)
 	sp.bCPUThread  = false;  // single core, deterministic bring-up
 	sp.bDSPHLE     = true;
 	sp.bDSPThread  = false;
 	sp.bSkipIdle   = true;
+	// NOTE 2026-07-09: bFastDiscSpeed=true was a PROBE (reverted — breaks real-disc
+	// compat). It advanced the hang from a DVD-wait to a VI-stage wait, proving the
+	// stall is the generic "interrupt handler entered, never rfi's back out" pattern,
+	// not any single device. Root target = the interrupt RETURN/dispatch path.
 	sp.bFastmem    = false;  // safe memory path (base+addr fastmem N/A on Xbox arena)
 	// Bisect flags REVERTED (2026-07-08): interpreting ops via FallBackToInterpreter
 	// replaced the 0x8023346C loop with a consistent CRASH — pointing at the JIT's
 	// C++ call/thunk path (ABI_CallFunction) itself, which the exception handler
 	// also uses. All ops JIT'd again to keep the clean loop baseline.
-	sp.m_strVideoBackend = "Software";
+	sp.m_strVideoBackend = "DX8";   // NV2A hardware backend
 	sp.iRenderWindowWidth  = 640;
 	sp.iRenderWindowHeight = 480;
 	SConfig::GetInstance().sBackend = BACKEND_NULLSOUND;

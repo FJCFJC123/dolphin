@@ -36,6 +36,7 @@ enum InterruptCause
 
 extern volatile u32 m_InterruptCause;
 extern volatile u32 m_InterruptMask;
+extern u32 g_last_ext_source; // avenue-3 forensics
 extern u32 Fifo_CPUBase;
 extern u32 Fifo_CPUEnd;
 extern u32 Fifo_CPUWritePointer;

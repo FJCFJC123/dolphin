@@ -22,6 +22,7 @@
 #include "CPUDetect.h"
 #include "x64SSE1Fallback.h"
 
+extern bool g_jit_tiny_cache; // JitCache.cpp — avenue-1 cache-pressure test flag
 static volatile bool s_running = true;
 static bool s_rendererHasFocus = true;
 static HWND s_hwnd = NULL;
@@ -131,12 +132,15 @@ int main(int argc, char* argv[])
 	bool noSound = false;
 	bool fpuInterp = false; // Tier A: JIT integer/branch, interpret all FPU
 	bool sse1Mode = false;  // simulate Coppermine: report no SSE2 to the JIT
+	bool skipIdle = false;  // avenue-2: match Xbox bSkipIdle=true
 	for (int i = 2; i < argc; i++)
 	{
 		if (!strcmp(argv[i], "jit"))       useJit = true;
 		if (!strcmp(argv[i], "nosound"))   noSound = true;
 		if (!strcmp(argv[i], "fpuinterp")) fpuInterp = true;
 		if (!strcmp(argv[i], "sse1"))      sse1Mode = true;
+		if (!strcmp(argv[i], "tinyjit"))   g_jit_tiny_cache = true; // avenue-1: force Xbox 4MB/8192 cache to reproduce the storm
+		if (!strcmp(argv[i], "skipidle"))  skipIdle = true;         // avenue-2: match Xbox bSkipIdle=true
 	}
 
 	// Render window (the DX9 backend creates its child EmuWindow inside it)
@@ -162,6 +166,7 @@ int main(int argc, char* argv[])
 	sp.bCPUThread = false;        // single core for deterministic bring-up
 	sp.bDSPHLE = true;
 	sp.bDSPThread = false;
+	sp.bSkipIdle = skipIdle; // avenue-2: default false; "skipidle" arg -> true (matches Xbox)
 	sp.bFastmem = false; // TEMP repro: match the Xbox (safe memory path) to see if
 	                     // the 0x8023346C JIT exception bug reproduces on PC.
 	sp.m_strVideoBackend = "Software"; // software rasterizer (OGL present); no D3D9 needed

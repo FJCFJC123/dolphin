@@ -34,7 +34,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <VCInc>$(VCToolsInstallDir)include</VCInc>
     <UCRTInc>$(UniversalCRT_IncludePath)</UCRTInc>
-    <DolInc>$(ProjectDir);$(ProjectDir)shim;$(DOLSRC)\Common\Src;$(DOLSRC)\Core\Src;$(DOLSRC)\VideoCommon\Src;$(DOLSRC)\AudioCommon\Src;$(DOLSRC)\DiscIO\Src;$(DOLSRC)\InputCommon\Src;$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src;$(ProjectDir)..\..\Externals;$(ProjectDir)..\..\Externals\zlib;$(ProjectDir)..\..\Externals\polarssl\include;$(ProjectDir)..\..\Externals\CLRun\include;$(ProjectDir)..\..\Externals\Bochs_disasm;$(ProjectDir)..\..\Externals\LZO;$(ProjectDir)..\..\Externals\SFML\include;$(ProjectDir)..\..\Externals\libusb\include</DolInc>
+    <DolInc>$(ProjectDir);$(ProjectDir)shim;$(DOLSRC)\Common\Src;$(DOLSRC)\Core\Src;$(DOLSRC)\VideoCommon\Src;$(DOLSRC)\AudioCommon\Src;$(DOLSRC)\DiscIO\Src;$(DOLSRC)\InputCommon\Src;$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src;$(ProjectDir)..\Plugins\Plugin_VideoDX8\Src;$(ProjectDir)..\..\Externals;$(ProjectDir)..\..\Externals\zlib;$(ProjectDir)..\..\Externals\polarssl\include;$(ProjectDir)..\..\Externals\CLRun\include;$(ProjectDir)..\..\Externals\Bochs_disasm;$(ProjectDir)..\..\Externals\LZO;$(ProjectDir)..\..\Externals\SFML\include;$(ProjectDir)..\..\Externals\libusb\include</DolInc>
     <IncludePath>$(VCInc);$(UCRTInc);$(DolInc);$(RXDK_LIBS)include</IncludePath>
     <ExternalIncludePath>$(VCInc);$(UCRTInc);$(RXDK_LIBS)include</ExternalIncludePath>
     <LibraryPath>$(RXDK_LIBS)lib</LibraryPath>
@@ -197,6 +197,15 @@ if not exist "$(OutDir)XISO" mkdir "$(OutDir)XISO"
     <ClCompile Remove="$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src\HwRasterizer.cpp" /><!-- GL -> HwRasterizer_Xbox -->
     <ClCompile Remove="$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src\RasterFont.cpp" /><!-- GL font -->
     <ClCompile Remove="$(ProjectDir)..\Plugins\Plugin_VideoSoftware\Src\VideoConfigDialog.cpp" /><!-- wx -->
+  </ItemGroup>
+  <ItemGroup>
+    <!-- NV2A hardware renderer (Plugin_VideoDX8). xtl.h is force-included ahead of
+         Common.h so RXDK's _Interlocked intrinsics don't collide (C2733) - the same
+         ordering main_xbox.cpp uses by hand. -->
+    <ClCompile Include="$(ProjectDir)..\Plugins\Plugin_VideoDX8\Src\*.cpp">
+      <ForcedIncludeFiles>xtl.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Remove="$(ProjectDir)..\Plugins\Plugin_VideoDX8\Src\stdafx.cpp" />
   </ItemGroup>
   <ItemGroup>
     <!-- Xbox shell: XDK entry, D3D8 present backend, backend registration,

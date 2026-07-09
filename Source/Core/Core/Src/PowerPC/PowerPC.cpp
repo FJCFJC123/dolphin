@@ -23,6 +23,8 @@
 
 #include "../Host.h"
 #include "HW/EXI.h"
+#include "../HW/ProcessorInterface.h"
+#include <cstdio>
 
 CPUCoreBase *cpu_core_base;
 
@@ -113,9 +115,25 @@ void ResetRegisters()
 	SystemTimers::DecrementerSet();
 }
 
+#ifdef _XBOX
+extern "C" unsigned short g_xbox_fpcw = 0;   // x87 control word after SetPrecisionMode
+extern "C" unsigned       g_xbox_mxcsr = 0;  // SSE control/status word
+#endif
+
 void Init(int cpu_core)
 {
 	FPURoundMode::SetPrecisionMode(FPURoundMode::PREC_53);
+#ifdef _XBOX
+	// avenue-5: did RXDK's _control87(_PC_53) actually take? Correct = 0x027F
+	// (53-bit, round-nearest, masked). If it's 0x007F (24-bit) or unchanged kernel
+	// default, all shared double math is silently wrong on BOTH cores.
+	{
+		unsigned short cw = 0; unsigned mx = 0;
+		__asm { fnstcw cw }
+		__asm { stmxcsr mx }
+		g_xbox_fpcw = cw; g_xbox_mxcsr = mx;
+	}
+#endif
 
 	memset(ppcState.mojs, 0, sizeof(ppcState.mojs));
 	memset(ppcState.sr, 0, sizeof(ppcState.sr));
@@ -301,6 +319,33 @@ void UpdatePerformanceMonitor(u32 cycles, u32 num_load_stores, u32 num_fp_inst)
 		PowerPC::ppcState.Exceptions |= EXCEPTION_PERFORMANCE_MONITOR;
 }
 
+// DISPATCH DIVERGENCE LOG (2026-07-09): called from both interpreter and JIT at
+// __OSDispatchInterrupt key points to compare the interrupt-handler path. If the
+// SSE1 JIT picks a different handler (r29/r31) for the same cause the interpreter
+// sees, that's the miscompile behind the Xbox interrupt storm.
+// Exception-take counters (Xbox wedge diagnosis 2026-07-09). Incremented each time
+// an exception is actually TAKEN (dispatched to its vector). One overlay snapshot
+// then shows WHICH exception is looping: DSI = a faulting load/store, EXT = external
+// interrupt storm, PROG = illegal instruction, DEC = decrementer, etc.
+extern "C" {
+	u32 g_exc_dsi = 0, g_exc_isi = 0, g_exc_prog = 0, g_exc_fpu = 0;
+	u32 g_exc_ext = 0, g_exc_dec = 0, g_exc_align = 0, g_exc_sys = 0;
+	u32 g_exc_dar = 0, g_exc_srr0 = 0;   // last DSI faulting address + SRR0
+}
+
+void LogHandlerDispatch(u32 pc)
+{
+#ifndef _XBOX
+	printf("[DISP] pc=%08x r3=%08x r4=%08x r5=%08x r12=%08x r28=%08x r29=%08x r30=%08x r31=%08x  INTSR=%08x INTMR=%08x EXC=%08x\n",
+		pc, ppcState.gpr[3], ppcState.gpr[4], ppcState.gpr[5], ppcState.gpr[12],
+		ppcState.gpr[28], ppcState.gpr[29], ppcState.gpr[30], ppcState.gpr[31],
+		ProcessorInterface::GetCause(), ProcessorInterface::GetMask(), ppcState.Exceptions);
+	fflush(stdout);
+#else
+	(void)pc;
+#endif
+}
+
 void CheckExceptions()
 {
 	// Make sure we are checking against the latest EXI status. This is required
@@ -333,6 +378,7 @@ void CheckExceptions()
 
 		INFO_LOG(POWERPC, "EXCEPTION_ISI");
 		Common::AtomicAnd(ppcState.Exceptions, ~EXCEPTION_ISI);
+		g_exc_isi++;
 	}
 	else if (exceptions & EXCEPTION_PROGRAM)
 	{
@@ -345,6 +391,7 @@ void CheckExceptions()
 
 		INFO_LOG(POWERPC, "EXCEPTION_PROGRAM");
 		Common::AtomicAnd(ppcState.Exceptions, ~EXCEPTION_PROGRAM);
+		g_exc_prog++;
 	} 
 	else if (exceptions & EXCEPTION_SYSCALL)
 	{
@@ -356,6 +403,7 @@ void CheckExceptions()
 
 		INFO_LOG(POWERPC, "EXCEPTION_SYSCALL (PC=%08x)", PC);
 		Common::AtomicAnd(ppcState.Exceptions, ~EXCEPTION_SYSCALL);
+		g_exc_sys++;
 	}
 	else if (exceptions & EXCEPTION_FPU_UNAVAILABLE)
 	{			
@@ -368,6 +416,7 @@ void CheckExceptions()
 
 		INFO_LOG(POWERPC, "EXCEPTION_FPU_UNAVAILABLE");
 		Common::AtomicAnd(ppcState.Exceptions, ~EXCEPTION_FPU_UNAVAILABLE);
+		g_exc_fpu++;
 	}
 	else if (exceptions & EXCEPTION_DSI)
 	{
@@ -380,6 +429,7 @@ void CheckExceptions()
 
 		INFO_LOG(POWERPC, "EXCEPTION_DSI");
 		Common::AtomicAnd(ppcState.Exceptions, ~EXCEPTION_DSI);
+		g_exc_dsi++; g_exc_dar = ppcState.spr[SPR_DAR]; g_exc_srr0 = SRR0;
 	} 
 	else if (exceptions & EXCEPTION_ALIGNMENT)
 	{
@@ -395,6 +445,7 @@ void CheckExceptions()
 
 		INFO_LOG(POWERPC, "EXCEPTION_ALIGNMENT");
 		Common::AtomicAnd(ppcState.Exceptions, ~EXCEPTION_ALIGNMENT);
+		g_exc_align++;
 	}
 
 	// EXTERNAL INTERRUPT
@@ -411,6 +462,7 @@ void CheckExceptions()
 
 			INFO_LOG(POWERPC, "EXCEPTION_EXTERNAL_INT");
 			Common::AtomicAnd(ppcState.Exceptions, ~EXCEPTION_EXTERNAL_INT);
+			g_exc_ext++;
 
 			_dbg_assert_msg_(POWERPC, (SRR1 & 0x02) != 0, "EXTERNAL_INT unrecoverable???");
 		}
@@ -435,6 +487,7 @@ void CheckExceptions()
 
 			INFO_LOG(POWERPC, "EXCEPTION_DECREMENTER");
 			Common::AtomicAnd(ppcState.Exceptions, ~EXCEPTION_DECREMENTER);
+			g_exc_dec++;
 		}
 	}
 }
@@ -458,6 +511,7 @@ void CheckExternalExceptions()
 
 			INFO_LOG(POWERPC, "EXCEPTION_EXTERNAL_INT");
 			Common::AtomicAnd(ppcState.Exceptions, ~EXCEPTION_EXTERNAL_INT);
+			g_exc_ext++;
 
 			_dbg_assert_msg_(POWERPC, (SRR1 & 0x02) != 0, "EXTERNAL_INT unrecoverable???");
 		}
@@ -482,6 +536,7 @@ void CheckExternalExceptions()
 
 			INFO_LOG(POWERPC, "EXCEPTION_DECREMENTER");
 			Common::AtomicAnd(ppcState.Exceptions, ~EXCEPTION_DECREMENTER);
+			g_exc_dec++;
 		}
 		else
 		{

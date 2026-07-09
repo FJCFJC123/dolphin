@@ -200,10 +200,17 @@ void Write32(const u32 _uValue, const u32 _iAddress)
 	}
 }
 
+// avenue-3 forensics: the exact (cause & mask) bits the LAST time UpdateException
+// asserted EXCEPTION_EXTERNAL_INT. If the storm shows EXC bit 0x4 set while the
+// live IC&IM==0, this holds the phantom source; if IC&IM!=0 it names the device.
+u32 g_last_ext_source = 0;
 void UpdateException()
 {
 	if ((m_InterruptCause & m_InterruptMask) != 0)
+	{
+		g_last_ext_source = m_InterruptCause & m_InterruptMask;
 		Common::AtomicOr(PowerPC::ppcState.Exceptions, EXCEPTION_EXTERNAL_INT);
+	}
 	else
 		Common::AtomicAnd(PowerPC::ppcState.Exceptions, ~EXCEPTION_EXTERNAL_INT);
 }

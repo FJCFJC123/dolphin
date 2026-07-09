@@ -42,6 +42,11 @@ void xbox_d3d8_set_device(void *dev)
 int xbox_d3d8_backbuffer_w(void) { return g_bbW; }
 int xbox_d3d8_backbuffer_h(void) { return g_bbH; }
 
+// The DX8 video backend (Plugin_VideoDX8) SHARES this one device — NV2A allows
+// only a single IDirect3DDevice8. D3D::Init() grabs it here instead of creating
+// a second one. Returns NULL until main_xbox has called xbox_d3d8_set_device().
+void *xbox_d3d8_get_device(void) { return (void*)g_dev; }
+
 // (Re)create the upload texture when the XFB size changes. The NV2A can create
 // textures between frames (unlike mid-scene), which is fine for the XFB blit.
 static bool ensure_tex(int w, int h)
@@ -401,7 +406,14 @@ extern "C" unsigned xbox_live_sprg(unsigned);
 extern "C" unsigned xbox_live_intcause();
 extern "C" unsigned xbox_live_intmask();
 extern "C" unsigned xbox_live_exceptions();
+extern "C" unsigned xbox_live_extsrc();
+extern "C" unsigned short g_xbox_fpcw;
+extern "C" unsigned g_xbox_mxcsr;
 extern "C" unsigned xbox_guest_op(unsigned);
+// Exception-take counters (which exception is looping) + last DSI faulting address.
+extern "C" unsigned g_exc_dsi, g_exc_isi, g_exc_prog, g_exc_fpu;
+extern "C" unsigned g_exc_ext, g_exc_dec, g_exc_align, g_exc_sys;
+extern "C" unsigned g_exc_dar, g_exc_srr0;
 extern "C" volatile unsigned g_xbox_adma;
 extern "C" volatile unsigned g_xbox_adma_en;
 extern "C" void xbox_d3d8_watchpaint(unsigned wd)
@@ -411,6 +423,18 @@ extern "C" void xbox_d3d8_watchpaint(unsigned wd)
 	// frames still win the device; we only paint when the emu isn't presenting.
 	if (!g_dev) return;
 	if (!TryEnterCriticalSection(&g_devLock)) return; // emu presenting -> skip
+	// The DX8 video backend binds the EFB (an offscreen texture) as the render
+	// target, so the overlay's Clear-drawn glyphs would land off-screen and Present
+	// would show the untouched backbuffer. Force the visible backbuffer as the RT so
+	// the diagnostics are drawn where they can be seen, regardless of the backend.
+	{
+		IDirect3DSurface8* bb = NULL;
+		if (SUCCEEDED(g_dev->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &bb)) && bb)
+		{
+			g_dev->SetRenderTarget(bb, NULL);
+			bb->Release();
+		}
+	}
 	MEMORYSTATUS ms; ms.dwLength = sizeof(ms);
 	GlobalMemoryStatus(&ms);
 	char line[80];
@@ -483,11 +507,20 @@ extern "C" void xbox_d3d8_watchpaint(unsigned wd)
 	draw_text(340, 416, 0xFF80FF80, line, 2);
 	// The context's saved SRR0 (OSContext+0x19c) = where returnFromInterrupt rfi's
 	// back to. If cSRR0 == 8023346C the handler is rfi'ing into itself = the loop.
-	{
-		unsigned curt2 = xbox_guest_op(0x800000e4);
-		wsprintfA(line, "cSRR0 %08X", curt2 ? xbox_guest_op(curt2 + 0x19c) : 0);
-		draw_text(340, 436, 0xFFFF8080, line, 2);
-	}
+	// avenue-5: x87 control word (should be 027F = 53-bit RN masked) + MXCSR
+	// (should be 1F80). If FCW != 027F, RXDK's _control87 didn't take and all
+	// shared double math is wrong on both cores.
+	// Exception-take counters: WHICH exception is looping. DSI = faulting load/store
+	// (DAR = the address). If DSI storms with DAR=8041xxxx, the context-save store is
+	// hitting unwritable guest memory. PRG = illegal instr (JIT emit bug). ISI = bad
+	// instruction fetch. Frozen-all = not an exception storm (plain code loop).
+	wsprintfA(line, "DSI %u ISI %u PRG %u", g_exc_dsi, g_exc_isi, g_exc_prog);
+	draw_text(340, 436, 0xFF80FFC0, line, 2);
+	// avenue-3 forensics: ExS = (cause&mask) when EXCEPTION_EXTERNAL_INT was last
+	// set; OSM = the OS's own interrupt-disable words (0x800000C4|C8). Compare ExS
+	// vs live IC&IM: equal+nonzero = real device stuck; ExS set but IC&IM==0 = phantom.
+	wsprintfA(line, "EXT %u DEC %u DAR %08X", g_exc_ext, g_exc_dec, g_exc_dar);
+	draw_text(340, 456, 0xFFFF80C0, line, 2);
 	g_dev->Present(NULL, NULL, NULL, NULL);
 	LeaveCriticalSection(&g_devLock);
 }

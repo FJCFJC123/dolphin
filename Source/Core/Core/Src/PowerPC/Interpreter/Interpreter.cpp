@@ -96,6 +96,10 @@ void Trace( UGeckoInstruction &instCode )
 int Interpreter::SingleStepInner(void)
 {
 	static UGeckoInstruction instCode;
+#ifndef _XBOX
+	if (PC == 0x80233128 || PC == 0x80233434 || PC == 0x80232018)
+		PowerPC::LogHandlerDispatch(PC);
+#endif
 	u32 function = m_EndBlock ? HLE::GetFunctionIndex(PC) : 0; // Check for HLE functions after branches
 	if (function != 0)
 	{

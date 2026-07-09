@@ -19,6 +19,10 @@ void  xbox_d3d8_set_device(void *dev);
 int   xbox_d3d8_backbuffer_w(void);
 int   xbox_d3d8_backbuffer_h(void);
 
+// The Plugin_VideoDX8 backend shares this single device (D3D::Init grabs it).
+// Cast the result to IDirect3DDevice8*. NULL before set_device().
+void *xbox_d3d8_get_device(void);
+
 // Present an RGBA8888 image (Dolphin XFB) fullscreen: upload -> quad -> Present.
 void  xbox_d3d8_present_xfb(const unsigned char *rgba, int width, int height);
 

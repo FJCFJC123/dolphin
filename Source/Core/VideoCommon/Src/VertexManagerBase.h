@@ -17,7 +17,15 @@ private:
 	static const u32 MAX_PRIMITIVES_PER_COMMAND = (u16)-1;
 	
 public:
+#ifdef _XBOX
+	// The stock 16MB (worst case 65535 verts * 188B, rounded up) is wildly oversized
+	// for a 128MB console and starves the JIT's 24MB instruction cache (JIT+DX8 hit
+	// 0 free RAM). 4MB still stages ~22,000 verts per GX command — far beyond any real
+	// draw; an over-large command trips the existing overflow guard rather than OOMing.
+	static const u32 MAXVBUFFERSIZE = 0x400000;  // 4MB
+#else
 	static const u32 MAXVBUFFERSIZE = ROUND_UP_POW2 (MAX_PRIMITIVES_PER_COMMAND * LARGEST_POSSIBLE_VERTEX);
+#endif
 	
 	// We may convert triangle-fans to triangle-lists, almost 3x as many indices.
 	static const u32 MAXIBUFFERSIZE = ROUND_UP_POW2 (MAX_PRIMITIVES_PER_COMMAND * 3);

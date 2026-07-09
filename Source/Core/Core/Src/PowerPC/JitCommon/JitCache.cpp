@@ -11,6 +11,8 @@
 
 #include "Common.h"
 
+#include <cstdio>
+
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -47,6 +49,18 @@ using namespace Gen;
 
 #define INVALID_EXIT 0xFFFFFFFF
 
+// JIT CACHE-PRESSURE TEST (2026-07-09, avenue 1): force the Xbox tiny-cache config
+// (4MB code / 8192 blocks) onto the PC to reproduce the interrupt-handler storm.
+// g_jit_clear_count counts full-cache Clears; printed each clear so we can correlate
+// storm onset with the Nth clear. On Xbox this is always tiny; on PC the "tinyjit"
+// harness arg flips it on.
+#ifdef _XBOX
+bool g_jit_tiny_cache = true;
+#else
+bool g_jit_tiny_cache = false;
+#endif
+int g_jit_clear_count = 0;
+
 bool JitBlock::ContainsAddress(u32 em_address)
 {
 	// WARNING - THIS DOES NOT WORK WITH INLINING ENABLED.
@@ -68,12 +82,7 @@ extern "C" void xbox_note_stage(const char*);
 	void JitBaseBlockCache::Init()
 	{
 		BSTAGE("blk:enter");
-#ifdef _XBOX
-		MAX_NUM_BLOCKS = 8192;  // pools weren't the bug; modest 8192 (~1.6MB) to keep
-		                        // headroom for the full 32MB RAM restore.
-#else
-		MAX_NUM_BLOCKS = 65536*2;
-#endif
+		MAX_NUM_BLOCKS = g_jit_tiny_cache ? 8192 : 65536*2;
 
 #if defined USE_OPROFILE && USE_OPROFILE
 		agent = op_open_agent();
@@ -161,6 +170,10 @@ extern "C" void xbox_note_stage(const char*);
 	// is full and when saving and loading states.
 	void JitBaseBlockCache::Clear()
 	{
+		g_jit_clear_count++;
+#ifndef _XBOX
+		printf("[JITCLEAR] #%d  (had %d blocks)\n", g_jit_clear_count, num_blocks); fflush(stdout);
+#endif
 #if defined(_DEBUG) || defined(DEBUGFAST)
 		if (IsFull())
 			Core::DisplayMessage("Clearing block cache.", 3000);
